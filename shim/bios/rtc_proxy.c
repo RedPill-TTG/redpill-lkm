@@ -165,12 +165,14 @@ int rtc_proxy_set_time(struct MfgCompatTime *mfgTime)
 
     //Year validation needs to take leap years into account. This code can be shorter but it's expended for readability
     if (unlikely(mfgTime->month == 1 && year_is_leap(mfgTime->year))) {
-        if (mfgTime->day != (months_to_days[mfgTime->month] + 1)) {
-            pr_loc_wrn("Invalid RTC leap year day of month in %s", __FUNCTION__);
+        if (mfgTime->day > (months_to_days[mfgTime->month] + 1)) {
+            pr_loc_wrn("Invalid RTC leap year day (%u > %u) of month %u in %s", mfgTime->day,
+                       (months_to_days[mfgTime->month] + 1), mfgTime->month, __FUNCTION__);
             return -EINVAL;
         }
-    } else if(mfgTime->day != (months_to_days[mfgTime->month])) {
-        pr_loc_wrn("Invalid RTC regular year day of month in %s", __FUNCTION__);
+    } else if (mfgTime->day > months_to_days[mfgTime->month]) {
+        pr_loc_wrn("Invalid RTC regular year day (%u > %u) of month %u in %s", mfgTime->day,
+                   months_to_days[mfgTime->month], mfgTime->month, __FUNCTION__);
         return -EINVAL;
     }
 
