@@ -3,7 +3,6 @@
 #include "../config/runtime_config.h" //hw_config
 #include "../internal/call_protected.h" //early_serial_setup()
 #include "../internal/override_symbol.h" //overriding uart_match_port()
-#include "../internal/uart/uart_defs.h" //struct uart_port, COM ports definition, UART_NR
 #include <linux/serial_8250.h> //serial8250_unregister_port
 
 #ifdef DBG_DISABLE_UART_SWAP_FIX
