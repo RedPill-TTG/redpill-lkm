@@ -63,12 +63,7 @@ bool kernel_has_symbol(const char *name) {
 }
 
 DEFINE_UNEXPORTED_SHIM(int, cmdline_proc_show, CP_LIST(struct seq_file *m, void *v), CP_LIST(m, v), -EFAULT);
-
-//See https://github.com/torvalds/linux/commit/6bbb614ec478961c7443086bdf7fd6784479c14a
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
-DEFINE_UNEXPORTED_SHIM(int, set_memory_ro, CP_LIST(unsigned long addr, int numpages), CP_LIST(addr, numpages), -EFAULT);
-DEFINE_UNEXPORTED_SHIM(int, set_memory_rw, CP_LIST(unsigned long addr, int numpages), CP_LIST(addr, numpages), -EFAULT);
-#endif
+DEFINE_UNEXPORTED_SHIM(void, flush_tlb_all, CP_LIST(void), CP_LIST(), __VOID_RETURN__);
 
 //See header file for detailed explanation what's going on here as it's more complex than a single commit
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)

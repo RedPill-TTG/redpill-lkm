@@ -14,15 +14,7 @@ bool kernel_has_symbol(const char *name);
 
 #include <linux/seq_file.h>
 CP_DECLARE_SHIM(int, cmdline_proc_show, CP_LIST(struct seq_file *m, void *v));
-
-//See https://github.com/torvalds/linux/commit/6bbb614ec478961c7443086bdf7fd6784479c14a
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
-CP_DECLARE_SHIM(int, set_memory_ro, CP_LIST(unsigned long addr, int numpages));
-CP_DECLARE_SHIM(int, set_memory_rw, CP_LIST(unsigned long addr, int numpages));
-#else
-#define _set_memory_ro(...) set_memory_ro(__VA_ARGS__)
-#define _set_memory_rw(...) set_memory_rw(__VA_ARGS__)
-#endif
+CP_DECLARE_SHIM(void, flush_tlb_all, CP_LIST(void));
 
 /* Thanks Jeff... https://groups.google.com/g/kernel-meetup-bangalore/c/rvQccTl_3kc/m/BJCnnXGCAgAJ
  * In case the link disappears: Jeff Layton from RedHat decided to just nuke the getname() API after 7 years of it being
@@ -59,7 +51,6 @@ CP_DECLARE_SHIM(struct filename *, getname, CP_LIST(const char __user *name));
 typedef struct uart_port *uart_port_p;
 CP_DECLARE_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port));
 CP_DECLARE_SHIM(int, serial8250_find_port, CP_LIST(struct uart_port *p));
-
 
 #ifdef CONFIG_SYNO_BOOT_SATA_DOM
 struct Scsi_Host;

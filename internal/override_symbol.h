@@ -1,6 +1,8 @@
 #ifndef REDPILLLKM_OVERRIDE_KFUNC_H
 #define REDPILLLKM_OVERRIDE_KFUNC_H
 
+#include <linux/types.h>
+
 #define OVERRIDE_JUMP_SIZE 1 + 1 + 8 + 1 + 1 //MOVQ + %rax + $vaddr + JMP + *%rax
 #define DEFINE_OVSYMBOL_PTRS(fname) \
     static unsigned char *fname##_code = NULL; \
@@ -19,38 +21,97 @@
     fname##_code = NULL; \
     fname##_addr = NULL; \
 
+typedef struct override_symbol_inst override_symbol_inst;
+
+/************************************************* Current interface **************************************************/
+/**
+ * Calls the original symbol, returning nothing, that was previously overridden
+ *
+ * @param sym pointer to a override_symbol_inst
+ * @param ... any arguments to the original function
+ *
+ * @return 0 if the execution succeeded, -E if it didn't
+ */
+#define call_overridden_symbol_void(sym, ...) ({              \
+    int __ret;                                                \
+    bool __was_installed = symbol_is_overridden(sym);         \
+    _Pragma("GCC diagnostic push")                            \
+    _Pragma("GCC diagnostic ignored \"-Wstrict-prototypes\"") \
+    void (*__ptr)() = __get_org_ptr(sym);                     \
+    _Pragma("GCC diagnostic pop")                             \
+    __ret = __disable_symbol_override(sym);                   \
+    if (likely(__ret == 0)) {                                 \
+        __ptr(__VA_ARGS__);                                   \
+        if (likely(__was_installed)) {                        \
+        __ret = __enable_symbol_override(sym);                \
+        }                                                     \
+    }                                                         \
+    __ret;                                                    \
+});
+
+/**
+ * Calls the original symbol, returning a value, that was previously overridden
+ *
+ * @param out_var name of the variable where original function return value should be placed
+ * @param sym pointer to a override_symbol_inst
+ * @param ... any arguments to the original function
+ *
+ * @return 0 if the execution succeeded, -E if it didn't
+ */
+#define call_overridden_symbol(out_var, sym, ...) ({          \
+    int __ret;                                                \
+    bool __was_installed = symbol_is_overridden(sym);         \
+    _Pragma("GCC diagnostic push")                            \
+    _Pragma("GCC diagnostic ignored \"-Wstrict-prototypes\"") \
+    typeof (out_var) (*__ptr)() = __get_org_ptr(sym);         \
+    _Pragma("GCC diagnostic pop")                             \
+    __ret = __disable_symbol_override(sym);                   \
+    if (likely(__ret == 0)) {                                 \
+        out_var = __ptr(__VA_ARGS__);                         \
+        if (likely(__was_installed)) {                        \
+            __ret = __enable_symbol_override(sym);            \
+        }                                                     \
+    }                                                         \
+    __ret;                                                    \
+});
+
 /**
  * Overrides a kernel symbol with something else of your choice
  *
  * @param name Name of the kernel symbol (function) to override
  * @param new_sym_ptr An address/pointer to a new function
- * @param org_sym_ptr Pointer to some space to save address of the original function (warning: it's a pointer-pointer)
- * @param org_sym_code Pointer to some space to save original function code
  *
- * @return 0 on success, -E on error
+ * @return Instance of override_symbol_inst struct pointer on success, ERR_PTR(-E) on error
  *
  * @example
- *     int null_printk() { return 0; }
- *     void *backup_addr; //A space for a POINTER
- *     unsigned char backup_code[OVERRIDE_JUMP_SIZE] = { '\0' }; //don't forget to actually reserve space
- *     override_symbol("printk",    null_printk,    &backup_addr,                        backup_code);
- *     //               ^           ^               ^                                    ^
- *     //               override    new function    pass a pointer to a pointer-space    save backup of printk()
+ *     struct override_symbol_inst *ovi;
+ *     int null_printk() {
+ *         int print_res;
+ *         call_overridden_symbol(print_res, ovi, "No print for you!");
+ *         return print_res;
+ *     }
+ *     ovi = override_symbol_ng("printk", null_printk);
+ *     if (IS_ERR(ovi)) { ... handle error ... }
  *     ...
- *     restore_symbol(backup_addr, backup_code); //restore backed-up copy of printk()
+ *     restore_symbol_ng(backup_addr, backup_code); //restore backed-up copy of printk()
  *
  * @todo: This should be rewritten using INSN without inline ASM wizardy, but this is much more complex
  */
-int override_symbol(const char *name, const void *new_sym_ptr, void * *org_sym_ptr, unsigned char *org_sym_code);
+struct override_symbol_inst* __must_check override_symbol_ng(const char *name, const void *new_sym_ptr);
 
 /**
- * Restores symbol overridden by override_symbol()
+ * Restores symbol overridden by override_symbol_ng()
  *
- * For details see override_symbol() docblock
+ * For details see override_symbol_ng() docblock
  *
  * @return 0 on success, -E on error
  */
-int restore_symbol(void * org_sym_ptr, const unsigned char *org_sym_code);
+int restore_symbol_ng(struct override_symbol_inst *sym);
+
+/**
+ * Check if the given symbol override is currently active
+ */
+bool symbol_is_overridden(struct override_symbol_inst *sym);
 
 /**
  * Non-destructively overrides a syscall
@@ -77,5 +138,47 @@ int override_syscall(unsigned int syscall_num, const void *new_sysc_ptr, void * 
  * @return 0 on success, -E on error
  */
 int restore_syscall(unsigned int syscall_num);
+
+/************************************************** Legacy interface **************************************************/
+/**
+ * Overrides a kernel symbol with something else of your choice
+ *
+ * @param name Name of the kernel symbol (function) to override
+ * @param new_sym_ptr An address/pointer to a new function
+ * @param org_sym_ptr Pointer to some space to save address of the original function (warning: it's a pointer-pointer)
+ * @param org_sym_code Pointer to some space to save original function code
+ *
+ * @return 0 on success, -E on error
+ *
+ * @example
+ *     int null_printk() { return 0; }
+ *     void *backup_addr; //A space for a POINTER
+ *     unsigned char backup_code[OVERRIDE_JUMP_SIZE] = { '\0' }; //don't forget to actually reserve space
+ *     override_symbol("printk",    null_printk,    &backup_addr,                        backup_code);
+ *     //               ^           ^               ^                                    ^
+ *     //               override    new function    pass a pointer to a pointer-space    save backup of printk()
+ *     ...
+ *     restore_symbol(backup_addr, backup_code); //restore backed-up copy of printk()
+ *
+ * @deprecated use override_symbol_ng() instead
+ */
+int override_symbol(const char *name, const void *new_sym_ptr, void * *org_sym_ptr, unsigned char *org_sym_code);
+
+/**
+ * Restores symbol overridden by override_symbol()
+ *
+ * For details see override_symbol() docblock
+ *
+ * @return 0 on success, -E on error
+ * @deprecated use restore_symbol_ng() instead
+ */
+int restore_symbol(void * org_sym_ptr, const unsigned char *org_sym_code);
+
+
+/****************** Private helpers (should not be used directly by any code outside of this unit!) *******************/
+#include <linux/types.h>
+int __enable_symbol_override(override_symbol_inst *sym);
+int __disable_symbol_override(override_symbol_inst *sym);
+void * __get_org_ptr(struct override_symbol_inst *sym);
 
 #endif //REDPILLLKM_OVERRIDE_KFUNC_H
