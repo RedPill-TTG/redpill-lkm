@@ -176,7 +176,7 @@ typedef int (*mfgc_temp_cb)(struct MfgCompatTemp *); //int f(MfgCompatTemp *)
 //TODO: this list is not complete - add all callback types
 
 #ifdef CONFIG_SYNO_PORT_MAPPING_V2
-typedef int (*mfgc_set_hdd_led_cb)(enum MfgCompatHddLedStatus *status);
+typedef int (*mfgc_set_hdd_led_cb)(struct MfgCompatHddLedStatus *status);
 #else
 typedef int (*mfgc_set_hdd_led_cb)(int, enum MfgCompatHddLedState state); //int f(void)
 #endif
