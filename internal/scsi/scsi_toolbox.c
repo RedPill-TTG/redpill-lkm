@@ -94,6 +94,7 @@ long long opportunistic_read_capacity(struct scsi_device *sdp)
             //Drive deliberately rejected the request and indicated that this situtation will not change
             if (sshdr.sense_key == ILLEGAL_REQUEST && (sshdr.asc == 0x20 || sshdr.asc == 0x24) && sshdr.ascq == 0x00) {
                 pr_loc_err("Drive refused to provide capacity");
+                kfree(buffer);
                 return -EINVAL;
             }
 
