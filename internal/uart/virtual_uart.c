@@ -66,7 +66,7 @@
 #include "vuart_internal.h"
 #include "../../debug/debug_vuart.h" //it will provide normal or nooped versions of macros; CHECKS VUART_DEBUG_LOG
 #include "../../common.h"
-#include "uart_defs.h" //COM defs & struct uart_port
+#include "../../config/uart_defs.h" //COM defs & struct uart_port
 #include "vuart_virtual_irq.h" //vIRQ handling & shimming; CHECKS VUART_USE_TIMER_FALLBACK
 #include <linux/serial_8250.h> //serial8250_unregister_port, uart_8250_port
 #include <linux/serial_reg.h> //UART_* consts

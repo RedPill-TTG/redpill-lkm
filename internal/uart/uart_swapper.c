@@ -82,7 +82,7 @@
 #include "../../common.h"
 #include "../call_protected.h" //early_serial_setup()
 #include "../override_symbol.h" //overriding uart_match_port()
-#include "../uart/uart_defs.h" //struct uart_port, COM ports definition, UART_NR
+#include "../../config/uart_defs.h" //struct uart_port, COM ports definition, UART_NR
 #include <linux/serial_8250.h> //struct uart_8250_port
 #include <linux/console.h> //console_lock(), console_unlock()
 #include <linux/hardirq.h> //synchronize_irq()

@@ -2,7 +2,7 @@
 #include "platforms.h"
 #include "../common.h"
 #include "cmdline_delegate.h"
-#include "../internal/uart/uart_defs.h"
+#include "uart_defs.h"
 
 struct runtime_config current_config = {
     .hw = { '\0' },

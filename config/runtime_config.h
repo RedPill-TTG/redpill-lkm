@@ -1,22 +1,20 @@
 #ifndef REDPILLLKM_RUNTIME_CONFIG_H
 #define REDPILLLKM_RUNTIME_CONFIG_H
 
-#include <linux/types.h> //bool
+#include "uart_defs.h" //UART config values
 #include "../shim/pci_shim.h" //pci_shim_device_type
+#include <linux/types.h> //bool
 
 //These below are currently known runtime limitations
 #define MAX_NET_IFACES 8
 #define MAC_ADDR_LEN 12
 #define MAX_BLACKLISTED_CMDLINE_TOKENS 10
 
-#ifdef CONFIG_SYNO_X86_SERIAL_PORT_SWAP
-#define UART_BUG_SWAPPED //indicates that first two UARTs are swapped (sic!). Yes, we do consider it a fucking bug.
-#endif
-
 #ifdef CONFIG_SYNO_BOOT_SATA_DOM
 #define NATIVE_SATA_DOM_SUPPORTED //whether SCSI sd.c driver supports native SATA DOM
 #endif
 
+//UART-related constants were moved to uart_defs.h, to allow subcomponents to importa a smaller subset than this header
 
 //Defines below are experimentally determined to be sufficient but can often be changed
 #define MAX_VPCI_BUSES 8 //adjust if needed, max 256
