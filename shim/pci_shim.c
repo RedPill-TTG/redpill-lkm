@@ -42,7 +42,7 @@ static int vdev_add_88SE9235(unsigned char bus_no)
     dev_dsc->rev_id = 0x11;
     dev_dsc->class = U24_CLASS_TO_U8_CLASS(PCI_CLASS_STORAGE_SATA_AHCI);
     dev_dsc->subclass = U24_CLASS_TO_U8_SUBCLASS(PCI_CLASS_STORAGE_SATA_AHCI);
-    dev_dsc->prog_if = U24_CLASS_TO_U8_SUBCLASS(PCI_CLASS_STORAGE_SATA_AHCI);
+    dev_dsc->prog_if = U24_CLASS_TO_U8_PROGIF(PCI_CLASS_STORAGE_SATA_AHCI);
     add_vdev_and_return();
 }
 
