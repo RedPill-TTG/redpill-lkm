@@ -22,7 +22,7 @@ CP_DECLARE_SHIM(int, set_memory_ro, CP_LIST(unsigned long addr, int numpages));
 CP_DECLARE_SHIM(int, set_memory_rw, CP_LIST(unsigned long addr, int numpages));
 #else
 #define _set_memory_ro(...) set_memory_ro(__VA_ARGS__)
-#define _set_memory_rw(...) set_memory_ro(__VA_ARGS__)
+#define _set_memory_rw(...) set_memory_rw(__VA_ARGS__)
 #endif
 
 //We only need these for intercept_execve() on newer kernels
