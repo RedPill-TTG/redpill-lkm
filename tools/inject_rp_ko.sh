@@ -19,6 +19,7 @@ fi
 echo "Detaching $img from all loopdevs"
 losetup -j "$img" | grep -E -o '^/dev/loop[0-9]+' | \
 while read -r loopdev; do
+  umount "${loopdev}p"? 2>/dev/null
   losetup -d "$loopdev"
   echo "Detached $loopdev"
 done
