@@ -5,14 +5,18 @@ cmake_minimum_required(VERSION 3.0)
 project(redpill C)
 
 set(CMAKE_C_STANDARD 11)
+include_directories(compat/toolkit/include)
+
 add_definitions(-DLINUX_VERSION_CODE=199273)
-include_directories(./linux-3.10.x-bromolow-25426/include)
-include_directories(./linux-3.10.x-bromolow-25426/arch/x86/include)
+include_directories(../linux-3.10.x-bromolow-25426/include)
+include_directories(../linux-3.10.x-bromolow-25426/arch/x86/include)
+include_directories(../linux-3.10.x-bromolow-25426/arch/x86/include/uapi)
 add_definitions(-DCONFIG_SYNO_X86_SERIAL_PORT_SWAP)
 
 #add_definitions(-DLINUX_VERSION_CODE=263227)
-#include_directories(./linux-4.4.x-apollolake-25426/include)
-#include_directories(./linux-4.4.x-apollolake-25426/arch/x86/include)
+#include_directories(../linux-4.4.x-apollolake-25426/include)
+#include_directories(../linux-4.4.x-apollolake-25426/arch/x86/include)
+#include_directories(../linux-4.4.x-apollolake-25426/arch/x86/include/uapi)
 
 # Custom options in our makefile
 add_definitions(-DDBG_EXECVE)
@@ -767,6 +771,10 @@ add_definitions(-DCONFIG_OID_REGISTRY)
 add_definitions(-DCONFIG_UCS2_STRING)
 add_definitions(-DCONFIG_SERIAL_8250_NR_UARTS=4)
 add_definitions(-DCONFIG_SYNO_BOOT_SATA_DOM) # only some platforms support that, notably 3615xs while 918+ doesn't
+
+# SATA DOM-related configs (only models with it, e.g. 3615xs but not 918+)
+add_definitions(-DCONFIG_SYNO_SATA_DOM_VENDOR=\"DUMMY_VENDOR\")
+add_definitions(-DCONFIG_SYNO_SATA_DOM_MODEL=\"DUMMY_MODEL\")
 
 add_executable(redpill
         redpill_main.c redpill_main.h internal/call_protected.c internal/call_protected.h common.h config/cmdline_delegate.c config/cmdline_delegate.h shim/boot_device_shim.c shim/boot_device_shim.h internal/stealth.c internal/stealth.h config/runtime_config.c config/runtime_config.h test.c shim/bios_shim.c shim/bios_shim.h internal/override_symbol.c internal/override_symbol.h shim/bios/bios_shims_collection.c shim/bios/bios_shims_collection.h shim/block_fw_update_shim.c shim/block_fw_update_shim.h internal/intercept_execve.c internal/intercept_execve.h shim/disable_exectutables.c shim/disable_exectutables.h debug/debug_execve.c debug/debug_execve.h compat/string_compat.c compat/string_compat.h internal/stealth/sanitize_cmdline.c internal/stealth/sanitize_cmdline.h internal/virtual_pci.c internal/virtual_pci.h shim/pci_shim.c shim/pci_shim.h shim/bios/rtc_proxy.c shim/bios/rtc_proxy.h shim/bios/rtc_proxy.c shim/bios/rtc_proxy.h internal/uart/virtual_uart.c internal/uart/virtual_uart.h shim/uart_fixer.c shim/uart_fixer.h config/uart_defs.h debug/debug_vuart.h internal/uart/vuart_virtual_irq.c internal/uart/vuart_virtual_irq.h internal/uart/vuart_internal.h shim/boot_dev/usb_boot_shim.c shim/boot_dev/usb_boot_shim.h shim/boot_dev/sata_boot_shim.c shim/boot_dev/sata_boot_shim.h internal/uart/uart_swapper.c internal/uart/uart_swapper.h shim/pmu_shim.c shim/pmu_shim.h internal/intercept_driver_register.c internal/intercept_driver_register.h shim/shim_base.h)
