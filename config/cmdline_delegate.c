@@ -351,15 +351,16 @@ long get_kernel_cmdline(char *cmdline_out, size_t maxlen)
                                                    (char *)cmdline_blacklist[idx], idx);
 int populate_cmdline_blacklist(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMDLINE_TOKENS], syno_hw *model)
 {
-    //Currently this list is static. However it's prepared to be dynamic based on the model
+    //Currently, this list is static. However, it's prepared to be dynamic based on the model
     //Make sure you don't go over MAX_BLACKLISTED_CMDLINE_TOKENS (and if so adjust it)
     ADD_BLACKLIST_ENTRY(0, CMDLINE_CT_VID);
     ADD_BLACKLIST_ENTRY(1, CMDLINE_CT_PID);
     ADD_BLACKLIST_ENTRY(2, CMDLINE_CT_MFG);
-    ADD_BLACKLIST_ENTRY(3, CMDLINE_KT_LOGLEVEL);
-    ADD_BLACKLIST_ENTRY(4, CMDLINE_KT_ELEVATOR);
-    ADD_BLACKLIST_ENTRY(5, CMDLINE_KT_EARLY_PK);
-    ADD_BLACKLIST_ENTRY(6, CMDLINE_KT_THAW);
+    ADD_BLACKLIST_ENTRY(3, CMDLINE_KT_ELEVATOR);
+    ADD_BLACKLIST_ENTRY(4, CMDLINE_KT_LOGLEVEL);
+    ADD_BLACKLIST_ENTRY(5, CMDLINE_KT_PK_BUFFER);
+    ADD_BLACKLIST_ENTRY(6, CMDLINE_KT_EARLY_PK);
+    ADD_BLACKLIST_ENTRY(7, CMDLINE_KT_THAW);
 
     return 0;
 }

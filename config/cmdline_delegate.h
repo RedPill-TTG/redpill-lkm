@@ -20,8 +20,9 @@
 #define CMDLINE_CT_DOM_SZMAX "dom_szmax=" //Max size of SATA device (MiB) to be considered a DOM (usually you should NOT use this)
 
 //Standard Linux cmdline tokens
+#define CMDLINE_KT_ELEVATOR  "elevator=" //Sets I/O scheduler (we use it to load RP LKM earlier than normally possible)
 #define CMDLINE_KT_LOGLEVEL  "loglevel="
-#define CMDLINE_KT_ELEVATOR  "elevator="
+#define CMDLINE_KT_PK_BUFFER "log_buf_len=" //Length of the printk ring buffer (should usually be increased for debug)
 #define CMDLINE_KT_EARLY_PK  "earlyprintk"
 
 //Syno-specific cmdline tokens
