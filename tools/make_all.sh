@@ -7,7 +7,7 @@ LINUX_SRC_ROOT="$PWD/.."
 RP_LOAD_ROOT="$HOME/build/redpill-load"
 
 set -euo pipefail
-rm redpill-*.bin || true
+rm redpill-*.bin redpill-*.ko || true
 
 # Build for v6 for 3615xs
 make LINUX_SRC="$LINUX_SRC_ROOT/linux-3.10.x-bromolow-25426" clean
