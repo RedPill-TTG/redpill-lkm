@@ -346,31 +346,27 @@ static struct pci_sysdata x86_sysdata = {
 #define VDEV_IDX_VALID(x) ((x) >= 0 && (x) < MAX_VPCI_DEVS-1) //Check if virtual device INDEX is valid for this emulator
 #define VDEV_IDX_USED(x) ((x) >= 0 && (x) < free_dev_idx) //Check if a given bus index is used now in the emulator
 
-const struct virtual_device *
-vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no, void *descriptor)
+static inline int validate_bdf(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no)
 {
-    pr_loc_dbg("Attempting to add vPCI device [printed below] @ bus=%02x dev=%02x fn=%02x", bus_no, dev_no, fn_no);
-    print_pci_descriptor(descriptor);
-
     if (unlikely(!BUS_NO_VALID(bus_no))) {
         pr_loc_err("%02x is not a valid PCI bus number", bus_no);
-        return ERR_PTR(-EINVAL);
+        return -EINVAL;
     }
 
     if (unlikely(!DEV_NO_VALID(dev_no))) {
         pr_loc_err("%02x is not a valid PCI device number", dev_no);
-        return ERR_PTR(-EINVAL);
+        return -EINVAL;
     }
 
     if (unlikely(!FN_NO_VALID(fn_no))) {
         pr_loc_err("%02x is not a valid PCI device function number", fn_no);
-        return ERR_PTR(-EINVAL);
+        return -EINVAL;
     }
 
     //if the free device index is not valid it means we're out of free IDs for devices
     if (unlikely(!VDEV_IDX_VALID(free_dev_idx))) {
         pr_loc_bug("No more device indexes are available (max devs: %d)", MAX_VPCI_DEVS);
-        return ERR_PTR(-ENOMEM);
+        return -ENOMEM;
     }
 
     //If the device has the same B/D/F address it is a duplicate
@@ -378,22 +374,41 @@ vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
         if (
                 likely(*devices[i]->bus_no == bus_no) &&
                 unlikely(devices[i]->dev_no == dev_no && devices[i]->fn_no)
-           ) {
+                ) {
             pr_loc_err("Device bus=%02x dev=%02x fn=%02x already exists in vidx=%d", bus_no, dev_no, fn_no, i);
-            return ERR_PTR(-EEXIST);
+            return -EEXIST;
         }
     };
 
-    struct pci_bus *bus = NULL;
+    return 0;
+}
+
+static inline struct pci_bus *get_vbus_by_number(unsigned char bus_no)
+{
     for_each_bus_idx() { //Determine whether we need to rescan existing bus after adding a device OR scan a new root bus
         if (buses[i]->number == bus_no) {
             pr_loc_dbg("Found existing bus_no=%d @ bidx=%d", bus_no, i);
-            bus = buses[i];
+            return buses[i];
             break;
         }
     };
 
-    //At this point we know the device can be added either to a new or existing bus
+    return NULL;
+}
+
+const struct virtual_device *
+vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no, void *descriptor)
+{
+    pr_loc_dbg("Attempting to add vPCI device [printed below] @ bus=%02x dev=%02x fn=%02x", bus_no, dev_no, fn_no);
+    print_pci_descriptor(descriptor);
+
+    int error = validate_bdf(bus_no, dev_no, fn_no);
+    if (error != 0)
+        return ERR_PTR(error);
+
+    struct pci_bus *bus = get_vbus_by_number(bus_no);
+
+    //At this point we know the device can be added either to a new or existing bus so we have to populate their struct
     struct virtual_device *device = kmalloc(sizeof(struct virtual_device), GFP_KERNEL);
     device->dev_no = dev_no;
     device->fn_no = fn_no;
