@@ -63,7 +63,7 @@
 #define _pr_loc_wrn(fmt, ...) pr_warn( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define _pr_loc_inf(fmt, ...) pr_info( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define _pr_loc_dbg(fmt, ...) pr_info( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define _pr_loc_dbg_raw(fmt, ...) pr_info( "<%s/%s> " pr_fmt(fmt), KBUILD_MODNAME, __FILENAME__, ##__VA_ARGS__)
+#define _pr_loc_dbg_raw(fmt, ...) printk(fmt, ##__VA_ARGS__)
 #define _pr_loc_bug(fmt, ...) pr_err ( "<%s/%s:%d> !!BUG!! " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
 
 #if STEALTH_MODE >= STEALTH_MODE_FULL //all logs will be disabled in full
