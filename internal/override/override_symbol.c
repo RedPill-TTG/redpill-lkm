@@ -201,11 +201,16 @@ static inline void prepare_trampoline(struct override_symbol_inst *sym)
  */
 int __enable_symbol_override(struct override_symbol_inst *sym)
 {
+    if (sym->mem_protected)
+        set_symbol_rw(sym);
+
     WITH_OVS_LOCK(sym,
          if (likely(!sym->installed)) {
             if (!sym->has_trampoline)
                 prepare_trampoline(sym);
 
+            //after we got the lock need to re-check the memory protection - this shouldn't be changed within spinlock
+            //since it generates a warning... but sometimes we have no choice
             if (sym->mem_protected)
                 set_symbol_rw(sym);
 
@@ -228,8 +233,13 @@ int __enable_symbol_override(struct override_symbol_inst *sym)
  */
 int __disable_symbol_override(struct override_symbol_inst *sym)
 {
+    if (sym->mem_protected)
+        set_symbol_rw(sym);
+
     WITH_OVS_LOCK(sym,
         if (likely(sym->installed)) {
+            //after we got the lock need to re-check the memory protection - this shouldn't be changed within spinlock
+            //since it generates a warning... but sometimes we have no choice
             if (sym->mem_protected)
                 set_symbol_rw(sym);
 
