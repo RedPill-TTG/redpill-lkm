@@ -1,6 +1,7 @@
 #include "bios_shims_collection.h"
 #include "../../config/platform_types.h"
 #include "rtc_proxy.h"
+#include "bios_hwmon_shim.h"
 #include "../../common.h"
 #include "../../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "../../internal/override_symbol.h" //shimming leds stuff
@@ -145,6 +146,8 @@ bool shim_bios_module(const struct hw_config *hw, struct module *mod, unsigned l
         pr_loc_dbg("Native RTC supported - not enabling proxy (emulate_rtc=%d)", hw->emulate_rtc ? 1:0);
     }
 
+    shim_bios_module_hwmon_entries(hw); //Shim all hardware environment stuff (temps, fans, etc.)
+
     print_debug_symbols(vt_end);
 
     return true;
@@ -173,6 +176,7 @@ void reset_bios_shims(void)
     memset(org_shimmed_entries, 0, sizeof(org_shimmed_entries));
     memset(cust_shimmed_entries, 0, sizeof(cust_shimmed_entries));
     unregister_rtc_proxy_shim();
+    reset_bios_module_hwmon_shim();
 }
 
 /******************************** Kernel-level shims related to mfgBIOS functionality *********************************/

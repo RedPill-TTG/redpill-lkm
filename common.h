@@ -16,6 +16,15 @@
 
 //Enabled printing of all ioctl() calls (hooked or not)
 //#define DBG_SMART_PRINT_ALL_IOCTL
+
+//Normally GetHwCapability calls (checking what hardware supports) are responded internally. Setting this DBG adds log
+// of all requests & responses for hardware capabilities (and there're frquent but not overwhelming). Additionally this
+// option turns on additional calls to the original GetHwCapability and logs compared values. Some values are ALWAYS
+// proxied to the original GetHwCapability
+//#define DBG_HWCAP
+
+//Debug all hardware monitoring features (shim/bios/bios_hwmon_shim.c)
+//#define DBG_HWMON
 /**********************************************************************************************************************/
 
 #include "internal/stealth.h"
@@ -58,6 +67,7 @@
 #define kmalloc_or_exit_ptr(variable, size) do { __kalloc_or_exit(kmalloc, variable, size, ptr); } while(0)
 #define kzalloc_or_exit_int(variable, size) do { __kalloc_or_exit(kzalloc, variable, size, int); } while(0)
 #define kzalloc_or_exit_ptr(variable, size) do { __kalloc_or_exit(kzalloc, variable, size, ptr); } while(0)
+#define try_kfree(variable) do { if(variable) { kfree(variable); } } while(0)
 /**********************************************************************************************************************/
 
 /****************************************************** Logging *******************************************************/
