@@ -10,9 +10,9 @@ SRCS-y  += compat/string_compat.c \
 		   \
 		   internal/helper/math_helper.c internal/helper/memory_helper.c internal/helper/symbol_helper.c \
 		   internal/scsi/scsi_toolbox.c internal/scsi/scsi_notifier_list.c internal/scsi/scsi_notifier.c \
-		   internal/override_symbol.c internal/intercept_execve.c internal/call_protected.c \
-		   internal/intercept_driver_register.c internal/stealth/sanitize_cmdline.c internal/stealth.c \
-		   internal/virtual_pci.c internal/uart/uart_swapper.c internal/uart/vuart_virtual_irq.c \
+		   internal/override/override_symbol.c internal/override/override_syscall.c internal/intercept_execve.c \
+		   internal/call_protected.c internal/intercept_driver_register.c internal/stealth/sanitize_cmdline.c \
+		   internal/stealth.c internal/virtual_pci.c internal/uart/uart_swapper.c internal/uart/vuart_virtual_irq.c \
 		   internal/uart/virtual_uart.c internal/ioscheduler_fixer.c \
 		   \
 		   config/cmdline_delegate.c config/runtime_config.c \

@@ -4,7 +4,7 @@
 #include "bios_hwmon_shim.h"
 #include "../../common.h"
 #include "../../internal/helper/symbol_helper.h" //kernel_has_symbol()
-#include "../../internal/override_symbol.h" //shimming leds stuff
+#include "../../internal/override/override_symbol.h" //shimming leds stuff
 
 
 #define DECLARE_NULL_ZERO_INT(for_what)                         \

@@ -123,31 +123,6 @@ void put_overridden_symbol(struct override_symbol_inst *sym);
  */
 bool symbol_is_overridden(struct override_symbol_inst *sym);
 
-/**
- * Non-destructively overrides a syscall
- *
- * This produces an effect similar to override_symbol(). However, it should be faster, safer, and most importantly
- * allows calling the original syscall in the override.
- *
- * @param syscall_num Number of the syscall to override (e.g. open)
- *                    You can find them as __NR_* defines in arch/x86/include/generated/uapi/asm/unistd_64.h
- * @param new_sysc_ptr An address/pointer to a new function
- * @param org_sysc_ptr Pointer to some space to save address of the original syscall (warning: it's a pointer-pointer);
- *                     You can pass a null-ptr if you don't care about the original syscall and the function will not
- *                     touch it
- *
- * @return 0 on success, -E on error
- */
-int override_syscall(unsigned int syscall_num, const void *new_sysc_ptr, void * *org_sysc_ptr);
-
-/**
- * Restores the syscall previously replaced by override_syscall()
- *
- * For details see override_syscall() docblock.
- *
- * @return 0 on success, -E on error
- */
-int restore_syscall(unsigned int syscall_num);
 
 /****************** Private helpers (should not be used directly by any code outside of this unit!) *******************/
 #include <linux/types.h>

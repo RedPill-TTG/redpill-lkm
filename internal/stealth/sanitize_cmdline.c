@@ -31,7 +31,7 @@
 #include "sanitize_cmdline.h"
 #include "../../common.h"
 #include "../../config/cmdline_delegate.h" //get_kernel_cmdline() & CMDLINE_MAX
-#include "../override_symbol.h" //override_symbol() & restore_symbol()
+#include "../override/override_symbol.h" //override_symbol() & restore_symbol()
 #include <linux/seq_file.h> //seq_file, seq_printf()
 
 /**

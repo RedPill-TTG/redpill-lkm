@@ -4,7 +4,7 @@
 #include "bios_hwcap_shim.h"
 #include "../../common.h"
 #include "../shim_base.h"
-#include "../../internal/override_symbol.h" //overriding GetHWCapability
+#include "../../internal/override/override_symbol.h" //overriding GetHWCapability
 #include "../../config/platform_types.h" //hw_config, platform_has_hwmon_*
 #include <linux/synobios.h> //CAPABILITY_*, CAPABILITY
 

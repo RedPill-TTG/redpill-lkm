@@ -85,7 +85,7 @@
 #include "../../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "../../internal/scsi/hdparam.h" //a ton of ATA constants
 #include "../../internal/scsi/scsi_toolbox.h" //checking for "sd" driver load state
-#include "../../internal/override_symbol.h" //installing sd_ioctl_canary()
+#include "../../internal/override/override_symbol.h" //installing sd_ioctl_canary()
 #include <linux/fs.h> //struct block_device
 #include <linux/genhd.h> //struct gendisk
 #include <linux/blkdev.h> //struct block_device_operations

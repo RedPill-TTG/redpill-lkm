@@ -1,6 +1,6 @@
 #include "intercept_driver_register.h"
 #include "../common.h"
-#include "override_symbol.h"
+#include "override/override_symbol.h"
 #include <linux/platform_device.h> //platform_bus_type
 
 #define MAX_WATCHERS 5 //can be increased as-needed

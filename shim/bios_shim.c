@@ -51,7 +51,7 @@
 #include "bios_shim.h"
 #include "shim_base.h"
 #include "../common.h"
-#include "../internal/override_symbol.h"
+#include "../internal/override/override_symbol.h"
 #include "../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "bios/bios_shims_collection.h" //shim_bios_module(), unshim_bios_module(), shim_bios_disk_leds_ctrl()
 #include "bios/bios_hwcap_shim.h" //register_bios_hwcap_shim(), unregister_bios_hwcap_shim(), reset_bios_hwcap_shim()

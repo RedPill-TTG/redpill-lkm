@@ -39,7 +39,7 @@
 #include "../../internal/scsi/scsi_toolbox.h" //scsi_force_replug()
 #include "../../internal/scsi/scsi_notifier.h" //waiting for the drive to appear
 #include "../../internal/call_protected.h" //ida_pre_get()
-#include "../../internal/override_symbol.h" //overriding ida_pre_get()
+#include "../../internal/override/override_symbol.h" //overriding ida_pre_get()
 #include <scsi/scsi_device.h> //struct scsi_device
 #include <scsi/scsi_host.h> //struct Scsi_Host, SYNO_PORT_TYPE_*
 #include <linux/usb.h> //struct usb_device
