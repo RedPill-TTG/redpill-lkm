@@ -96,8 +96,7 @@
 
 /*********************************************** Extracting 8250 ports ************************************************/
 static struct uart_8250_port *serial8250_ports[UART_NR] = { NULL }; //recovered ptrs to serial8250_ports structure
-
-DEFINE_OVSYMBOL_PTRS(uart_match_port);
+static override_symbol_inst *ov_uart_match_port = NULL;
 
 /**
  * Fake uart_match_port() which always returns "no match" but collects all passing ports to serial8250_ports
@@ -128,14 +127,13 @@ static int uart_match_port_collector(struct uart_port *port1, struct uart_port *
  */
 static int __must_check enable_collector_matcher(void)
 {
-    if (unlikely(uart_match_port_addr))
+    if (unlikely(ov_uart_match_port))
         return 0; //it's not a problem is we already enabled it as it's enabled all the time
 
-    ALLOC_OVSYMBOL_PTRS(uart_match_port);
-    int out = override_symbol("uart_match_port", uart_match_port_collector, &uart_match_port_addr,
-                              uart_match_port_code);
-    if (unlikely(out != 0)) {
-        FREE_OVSYMBOL_PTRS(uart_match_port);
+    ov_uart_match_port = override_symbol_ng("uart_match_port", uart_match_port_collector);
+    if (unlikely(IS_ERR(ov_uart_match_port))) {
+        int out = PTR_ERR(ov_uart_match_port);
+        ov_uart_match_port = NULL;
         return out;
     }
 
@@ -149,11 +147,14 @@ static int __must_check enable_collector_matcher(void)
  */
 static int disable_collector_matcher(void)
 {
-    if (unlikely(!uart_match_port_addr))
+    if (unlikely(!ov_uart_match_port))
         return 0; //it's not a problem is we already disabled it
 
-    int out = restore_symbol(uart_match_port_addr, uart_match_port_code);
-    FREE_OVSYMBOL_PTRS(uart_match_port);
+    int out = restore_symbol_ng(ov_uart_match_port);
+    ov_uart_match_port = NULL;
+
+    if (unlikely(out != 0))
+        pr_loc_err("Failed to disable collector matcher, error=%d", out);
 
     return out;
 }

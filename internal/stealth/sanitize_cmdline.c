@@ -118,10 +118,10 @@ static int cmdline_proc_show_filtered(struct seq_file *m, void *v)
     return 0;
 }
 
-DEFINE_OVSYMBOL_PTRS(cmdline_proc_show);
+static override_symbol_inst *ov_cmdline_proc_show = NULL;
 int register_stealth_sanitize_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMDLINE_TOKENS])
 {
-    if (unlikely(cmdline_proc_show_addr)) {
+    if (unlikely(ov_cmdline_proc_show)) {
         pr_loc_bug("Attempted to %s while already registered", __FUNCTION__);
         return 0; //Technically it succeeded
     }
@@ -132,13 +132,11 @@ int register_stealth_sanitize_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACK
     if (!filtrated_cmdline && (out = filtrate_cmdline(cmdline_blacklist)) != 0)
         return out;
 
-    ALLOC_OVSYMBOL_PTRS(cmdline_proc_show);
-
-    out = override_symbol("cmdline_proc_show", cmdline_proc_show_filtered, &cmdline_proc_show_addr,
-                          cmdline_proc_show_code);
-    if (out != 0) {
+    ov_cmdline_proc_show = override_symbol_ng("cmdline_proc_show", cmdline_proc_show_filtered);
+    if (unlikely(IS_ERR(ov_cmdline_proc_show))) {
+        out = PTR_ERR(ov_cmdline_proc_show);
         pr_loc_err("Failed to override cmdline_proc_show - error %d", out);
-        FREE_OVSYMBOL_PTRS(cmdline_proc_show);
+        ov_cmdline_proc_show = NULL;
         return out;
     }
 
@@ -149,17 +147,16 @@ int register_stealth_sanitize_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACK
 
 int unregister_stealth_sanitize_cmdline(void)
 {
-    if (unlikely(!cmdline_proc_show_addr)) {
+    if (unlikely(!ov_cmdline_proc_show)) {
         pr_loc_bug("Attempted to %s while it's not registered", __FUNCTION__);
         return 0; //Technically it succeeded
     }
 
-    int out = restore_symbol(cmdline_proc_show_addr, cmdline_proc_show_code);
+    int out = restore_symbol_ng(ov_cmdline_proc_show);
     //We deliberately fall through here without checking as we have to free stuff at this point no matter what
 
     kfree(filtrated_cmdline);
     filtrated_cmdline = NULL;
-    FREE_OVSYMBOL_PTRS(cmdline_proc_show);
 
     if (likely(out == 0))
         pr_loc_inf("Original /proc/cmdline restored");
