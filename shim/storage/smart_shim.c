@@ -94,6 +94,17 @@
 
 #define SHIM_NAME "SMART emulator"
 
+#ifdef DBG_SMART_PRINT_ALL_IOCTL
+#define pr_loc_dbg_ioctl(cmd_hex, subcmd_name, bdev) \
+    pr_loc_dbg("Handling ioctl(0x%x)->%s for /dev/%s", cmd_hex, subcmd_name, (bdev)->bd_disk->disk_name);
+#define pr_loc_dbg_ioctl_unk(cmd_hex, subcmd_hex, bdev) \
+    pr_loc_dbg("Handling ioctl(cmd=0x%x ; sub=%0x%x) for /dev/%s - not hooked (noop)", \
+               cmd_hex, subcmd_hex, (bdev)->bd_disk->disk_name);
+#else
+#define pr_loc_dbg_ioctl(cmd_hex, subcmd_name, bdev) //noop
+#define pr_loc_dbg_ioctl_unk(cmd_hex, subcmd_hex, bdev) //noop
+#endif
+
 //address of original and unmodified sd_ioctl(); populated by the canary and after the canary trampoline is removed
 static int (*sd_ioctl_org) (struct block_device *, fmode_t, unsigned, unsigned long) = NULL;
 struct block_device_operations *sd_fops = NULL; //ptr to drivers/scsi/sd.c:sd_fops [to restore sd_ioctl on removal]
@@ -671,17 +682,17 @@ static int handle_hdio_drive_cmd_ioctl(struct block_device *bdev, fmode_t mode, 
         //this command probes the disk for its overall capabilities; it may have nothing to do with SMART reading but
         // we need to modify it to indicate SMART support
         case ATA_CMD_ID_ATA:
+            pr_loc_dbg_ioctl(cmd, "ATA_CMD_ID_ATA", bdev);
             return handle_ata_cmd_identify(ioctl_out, req_header, buff_ptr);
 
         //this command asks directly for the SMART data of the drive and will fail on drives with no real SMART support
-        case ATA_CMD_SMART:
-            //if the drive supports SMART it will just return the data as-is, no need to proxy
+        case ATA_CMD_SMART: //if the drive supports SMART it will just return the data as-is, no need to proxy
+            pr_loc_dbg_ioctl(cmd, "ATA_CMD_SMART", bdev);
             return (ioctl_out == 0) ? 0 : handle_ata_cmd_smart(req_header, buff_ptr);
 
         //We're only interested in a subset of commands - rest are simply redirected back
         default:
-            pr_loc_dbg("sd_ioctl(HDIO_DRIVE_CMD ; cmd=0x%02x) => %d - not a hooked cmd, noop",
-                       req_header[HDIO_DRIVE_CMD_HDR_CMD], ioctl_out);
+            pr_loc_dbg_ioctl_unk(cmd, req_header[HDIO_DRIVE_CMD_HDR_CMD], bdev);
             return ioctl_out;
     }
 }
@@ -734,7 +745,7 @@ static int __always_inline handle_ata_task_smart(const u8 *req_header, void __us
         }
         default:
             pr_loc_dbg("Unknown SMART *task* read w/feature=0x%02x", req_header[HDIO_DRIVE_TASK_HDR_FEATURE]);
-            return -EIO;
+            return -EIO; //We INTENTIONALLY error-out here as there shouldn't be any other ATA SMART *tasks* requested
     }
 }
 
@@ -767,8 +778,8 @@ handle_hdio_drive_task_ioctl(struct block_device *bdev, fmode_t mode, unsigned i
         //this command asks directly for the SMART data. From our understanding it's only used for a small subset of
         // commands. The normal SMART reads/logs/etc are going through HDIO_DRIVE_CMD instead. The only thing [so far]
         // is the SMART self-reported status which goes via HDIO_DRIVE_TASK route
-        case WIN_CMD_SMART:
-            //if the drive supports SMART it will just return the data as-is, no need to proxy
+        case WIN_CMD_SMART: //if the drive supports SMART it will just return the data as-is, no need to proxy
+            pr_loc_dbg_ioctl(cmd, "WIN_CMD_SMART", bdev);
             return (ioctl_out == 0) ? 0 : handle_ata_task_smart(req_header, buff_ptr);
 
         //We're only interested in a subset of commands run via task IOCTL - rest are simply redirected back
@@ -791,7 +802,9 @@ int sd_ioctl_canary_uninstall(void);
  */
 static int sd_ioctl_smart_shim(struct block_device *bdev, fmode_t mode, unsigned int cmd, unsigned long arg)
 {
+#ifdef DBG_SMART_PRINT_ALL_IOCTL
     pr_loc_dbg("Handling ioctl(0x%02x) for /dev/%s", cmd, bdev->bd_disk->disk_name);
+#endif
 
     if (unlikely(!sd_ioctl_org)) {
         pr_loc_bug("Called %s but no original sd_ioctl() address is known", __FUNCTION__);
@@ -806,7 +819,9 @@ static int sd_ioctl_smart_shim(struct block_device *bdev, fmode_t mode, unsigned
             return handle_hdio_drive_task_ioctl(bdev, mode, cmd, (void *)arg);
 
         default: //any other ioctls are proxied as-is
+#       ifdef DBG_SMART_PRINT_ALL_IOCTL
             pr_loc_dbg("sd_ioctl(0x%02x) - not a hooked ioctl, noop", cmd);
+#       endif
             return sd_ioctl_org(bdev, mode, cmd, arg);
     }
 }

@@ -13,6 +13,9 @@
 
 //Print A LOT of vUART debug messages
 //#define VUART_DEBUG_LOG
+
+//Enabled printing of all ioctl() calls (hooked or not)
+//#define DBG_SMART_PRINT_ALL_IOCTL
 /**********************************************************************************************************************/
 
 #include "internal/stealth.h"
