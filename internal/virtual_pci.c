@@ -129,6 +129,22 @@
  *                     => .... [and others]
  *             => pci_device_add if device probe succeeded
  *
+ * THE ACPI SAGA
+ * -------------
+ * If you were thinking PCI is hard you haven't heard about ACPI. Kernels starting from v3.13 require ACPI companion
+ * for PCI devices when the system was configured to run on an ACPI-complain x86 platform. This isn't an unusual
+ * assumption. Before v3.13 the struct x86_sysdata contained a simple ACPI handle, which could be NULL. Now it should
+ * contain a structure. However it still PROBABLY can be NULL.
+ * See https://github.com/torvalds/linux/commit/7b1998116bbb2f3e5dd6cb9a8ee6db479b0b50a9 for details of that change.
+ *
+ * When the structure (=ACPI data) is NULL the error "ACPI: \: failed to evaluate _DSM (0x1001)" will be logged upon
+ * scanning. However it seems to be harmless. There are two ways to get rid of this error: 1) Implement a proper ACPI
+ * _DSM [no, just NO], or 2) user override_symbol() for acpi_evaluate_dsm() with a function doing the following (for the
+ * time of scanning ONLY):
+ *   union acpi_object *obj = kmalloc(sizeof(union acpi_object), GFP_KERNEL);
+ *   obj->type = ACPI_TYPE_INTEGER;
+ *   obj->integer.value = 1;
+ *   return obj;
  *
  * KNOWN BUGS
  * ----------
@@ -306,8 +322,12 @@ static struct pci_ops pci_shim_ops = {
 static struct pci_sysdata x86_sysdata = {
     .domain = PCIBUS_VIRTUAL_DOMAIN,
 #ifdef CONFIG_ACPI
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0)
+    .companion = NULL, //See https://github.com/torvalds/linux/commit/7b1998116bbb2f3e5dd6cb9a8ee6db479b0b50a9
+#else
     .acpi = NULL,
-#endif
+#endif //LINUX_VERSION_CODE
+#endif //CONFIG_ACPI
     .iommu = NULL
 };
 
