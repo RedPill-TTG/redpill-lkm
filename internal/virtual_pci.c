@@ -146,6 +146,11 @@
  *   obj->integer.value = 1;
  *   return obj;
  *
+ * x86 BUS SCANNING BUG (>=v4.1)
+ * -----------------------------
+ * Since v4.1 adding a new bus under a different domain will cause devices on the bus to not be fully populated. See the
+ * comment in "vpci_add_device()" here for details & a simple fix.
+ *
  * KNOWN BUGS
  * ----------
  * Under Linux v3.10 once bus is added it cannot be fully removed (or we didn't find the correct way). When you do the
@@ -429,6 +434,24 @@ vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
     device->bus_no = &bus->number; //Replace temp bus number pointer with the actual bus struct pointer
     device->bus = bus;
     buses[free_bus_idx++] = bus;
+
+    /*
+     * There was a commit in v4.1 which made "subtle" change aimed to "cleanup control flow" by moving
+     * pci_bus_add_devices(bus) from drivers/pci/probe.c:pci_scan_bus() to a higher order
+     * arch/x86/pci/common.c:pcibios_scan_root().
+     * However this means that adding a bus with a domain different than 0 as used on x86 with BIOS/ACPI causes some
+     * resources to not be created (e.g. /sys/bus/pci/devices/..../config) which in turn breaks a ton of tools (lspci
+     * included). This is because pci_bus_add_devices() calls pci_create_sysfs_dev_files().
+     * It's important to mention that this is broken only for new buses - pci_rescan_bus() calls pci_bus_add_devices().
+     *
+     * Don't even fucking ask how long we looked for that...
+     *
+     * See https://github.com/torvalds/linux/commit/8e795840e4d89df3d594e736989212ee8a4a1fca#
+     */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+    pr_loc_dbg("Linux >=v4.1 quirk: calling pci_bus_add_devices(bus) manually");
+    pci_bus_add_devices(bus);
+#endif
 
     pr_loc_err("Added device with new bus @ bus=%02x dev=%02x fn=%02x", *device->bus_no, device->dev_no, device->fn_no);
     return device;
