@@ -2,6 +2,22 @@
 #define REDPILLLKM_OVERRIDE_KFUNC_H
 
 #define OVERRIDE_JUMP_SIZE 1 + 1 + 8 + 1 + 1 //MOVQ + %rax + $vaddr + JMP + *%rax
+#define DEFINE_OVSYMBOL_PTRS(fname) \
+    static unsigned char *fname##_code = NULL; \
+    static void *fname##_addr = NULL;
+#define ALLOC_OVSYMBOL_PTRS(fname) \
+    fname##_code = kmalloc(OVERRIDE_JUMP_SIZE, GFP_KERNEL); \
+    if (!unlikely(fname##_code)) { \
+        pr_loc_crt("kmalloc failed"); \
+        fname##_code = NULL; \
+        return -EFAULT; \
+    }
+//it IS SAFE to call this even on potentially unallocated variables, it's an intentional design choice to make code
+//using this more smooth in error handling
+#define FREE_OVSYMBOL_PTRS(fname) \
+    if (likely(fname##_code)) { kfree(fname##_code); } \
+    fname##_code = NULL; \
+    fname##_addr = NULL; \
 
 /**
  * Overrides a kernel symbol with something else of your choice
