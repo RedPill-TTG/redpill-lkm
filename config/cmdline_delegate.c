@@ -292,22 +292,53 @@ static bool report_unrecognized_option(const char *param_pointer)
 
 /************************************************* End of extractors **************************************************/
 
-long get_kernel_cmdline(char *cmdline_out, const size_t maxlen)
+static char cmdline_cache[CMDLINE_MAX] = { '\0' };
+/**
+ * Extracts the cmdline from kernel and caches it for later use
+ *
+ * The method we use here may seem weird but it is, believe or not, the most direct one available. Kernel cmdline
+ * internally is stored in a "saved_command_line" variable (and few derivatives) which isn't exported for modules in
+ * any way (at least on x86). The only semi-direct way to get it is to call the method responsible for /proc/cmdline)
+ */
+static int extract_kernel_cmdline(void)
 {
     struct seq_file cmdline_itr = {
-            .buf = cmdline_out,
-            .size = maxlen
+        .buf = cmdline_cache,
+        .size = CMDLINE_MAX
     };
 
-    int cmdline_ret = _cmdline_proc_show(&cmdline_itr, 0);
-    if (cmdline_ret != 0)
-        return cmdline_ret;
+    int out = _cmdline_proc_show(&cmdline_itr, 0);
+    if (out != 0)
+        return out;
 
     pr_loc_dbg("Cmdline count: %d", (unsigned int)cmdline_itr.count);
     if (unlikely(cmdline_itr.count == CMDLINE_MAX)) //if the kernel line is >1K
         pr_loc_wrn("Cmdline may have been truncated to %d", CMDLINE_MAX);
 
-    return (long)cmdline_itr.count;
+    return 0;
+}
+
+/**
+ * Returns kernel cmdline up to the length specified by maxlen
+ *
+ * @param cmdline_out
+ * @param maxlen
+ * @return 0 on success, -E2BIG if buffer was too small (but the operation succeeded up to maxlen), -E for error
+ */
+long get_kernel_cmdline(char *cmdline_out, size_t maxlen)
+{
+    if (unlikely(cmdline_cache[0] == '\0')) {
+        int out = extract_kernel_cmdline();
+        if (out != 0) {
+            pr_loc_err("Failed to extract kernel cmdline");
+            return out;
+        }
+    }
+
+    if (unlikely(maxlen > CMDLINE_MAX))
+        maxlen = CMDLINE_MAX;
+
+    return strscpy(cmdline_out, cmdline_cache, maxlen);
 }
 
 #define ADD_BLACKLIST_ENTRY(idx, token) cmdline_blacklist[idx] = kmalloc(sizeof(token), GFP_KERNEL); \
