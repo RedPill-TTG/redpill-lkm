@@ -54,6 +54,7 @@
 #include "../internal/override_symbol.h"
 #include "../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "bios/bios_shims_collection.h" //shim_bios_module(), unshim_bios_module(), shim_bios_disk_leds_ctrl()
+#include "bios/bios_hwcap_shim.h" //register_bios_hwcap_shim(), unregister_bios_hwcap_shim(), reset_bios_hwcap_shim()
 #include <linux/notifier.h> //module notification
 #include <linux/module.h> //struct module
 
@@ -101,6 +102,7 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
         vtable_start = vtable_end = NULL;
         enable_symbols_capture();
         reset_bios_shims();
+        reset_bios_hwcap_shim();
 
         return NOTIFY_OK;
     }
@@ -112,8 +114,8 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
     // populated in init but used later. This means we need to try to shim twice - as fast as possible after init call
     // and just after init call finished.
 
-    //We shouldn't react to MODULE_STATE_LIVE multiple times (can it happen? hmm...) nor do anything before init
-    // of the module finished changing the vtable
+    //We react to every module action by re-shimming its vtable as it might have changed. Other actions are done only
+    // once below.
     if (!shim_bios_module(hw_config, mod, vtable_start, vtable_end)) {
         bios_shimmed = false;
         return NOTIFY_OK;
@@ -122,7 +124,10 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
     if (state == MODULE_STATE_LIVE) {
         bios_shimmed = true;
         pr_loc_inf("%s BIOS *fully* shimmed", mod->name);
-    } else {
+    } else { //MODULE_STATE_COMING or MODULE_STATE_UNFORMED [but most likely actually MODULE_STATE_COMING]
+        if (likely(state == MODULE_STATE_COMING))
+            register_bios_hwcap_shim(hw_config);
+
         pr_loc_inf("%s BIOS *early* shimmed", mod->name);
     }
 
@@ -268,6 +273,7 @@ int unregister_bios_shim(void)
         return out;
 
     unshim_disk_leds_ctrl(); //this will be noop if nothing was registered
+    unregister_bios_hwcap_shim(); //this will be noop if nothing was registered
 
     hw_config = NULL;
 
