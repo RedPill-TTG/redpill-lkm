@@ -277,7 +277,7 @@ int register_native_sata_boot_shim(const struct boot_media *boot_dev_config)
     return -ENODEV;
 }
 
-int unregister_sata_boot_shim(void)
+int unregister_native_sata_boot_shim(void)
 {
     pr_loc_err("Native SATA boot shim cannot be unregistered in a kernel built without SATA DoM support");
     return -ENODEV;
