@@ -1,6 +1,7 @@
 #include "cmdline_delegate.h"
 #include "../common.h" //commonly used headers in this module
 #include "../internal/call_protected.h" //used to call cmdline_proc_show()
+#include <linux/seq_file.h> //struct seq_file
 
 #define ensure_cmdline_param(cmdline_param) \
     if (strncmp(param_pointer, cmdline_param, strlen_static(cmdline_param)) != 0) { return false; }
