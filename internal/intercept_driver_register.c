@@ -158,7 +158,7 @@ static int start_watching(void)
     }
 
     pr_loc_dbg("Starting intercept of %s()", WATCH_FUNCTION);
-    ov_driver_register = override_symbol_ng(WATCH_FUNCTION, driver_register_shim);
+    ov_driver_register = override_symbol(WATCH_FUNCTION, driver_register_shim);
     if (unlikely(IS_ERR(ov_driver_register))) {
         pr_loc_err("Failed to intercept %s() - error=%ld", WATCH_FUNCTION, PTR_ERR(ov_driver_register));
         ov_driver_register = NULL;
@@ -182,7 +182,7 @@ static int stop_watching(void)
     }
 
     pr_loc_dbg("Stopping intercept of %s()", WATCH_FUNCTION);
-    int out = restore_symbol_ng(ov_driver_register);
+    int out = restore_symbol(ov_driver_register);
     if (unlikely(out != 0)) {
         pr_loc_err("Failed to restore %s() - error=%ld", WATCH_FUNCTION, PTR_ERR(ov_driver_register));
         return out;

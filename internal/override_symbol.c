@@ -107,12 +107,25 @@ static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
 
 #define WITH_OVS_LOCK(__sym, code)                                     \
     do {                                                               \
-        pr_loc_dbg("Obtaining lock for <%p>", __sym->org_sym_ptr);     \
-        spin_lock_irqsave(&__sym->lock, __sym->lock_irq);              \
+        pr_loc_dbg("Obtaining lock for <%p>", (__sym)->org_sym_ptr);   \
+        spin_lock_irqsave(&(__sym)->lock, (__sym)->lock_irq);          \
         ({code});                                                      \
-        spin_unlock_irqrestore(&__sym->lock, __sym->lock_irq);         \
-        pr_loc_dbg("Released lock for <%p>", __sym->org_sym_ptr);      \
+        spin_unlock_irqrestore(&(__sym)->lock, (__sym)->lock_irq);     \
+        pr_loc_dbg("Released lock for <%p>", (__sym)->org_sym_ptr);    \
     } while(0);
+
+struct override_symbol_inst {
+    void *org_sym_ptr;
+    const void *new_sym_ptr;
+    char org_sym_code[OVERRIDE_JUMP_SIZE];
+    char trampoline[OVERRIDE_JUMP_SIZE];
+    spinlock_t lock;
+    unsigned long lock_irq;
+    bool installed:1; //whether the symbol is currently overrode (=has trampoline installed)
+    bool has_trampoline:1; //does this structure contain a valid trampoline code already?
+    bool mem_protected:1; //is the trampoline installation site memory-protected?
+    char name[];
+};
 
 /**
  * Disables write-protection for the memory where symbol resides
@@ -168,55 +181,37 @@ static void set_mem_ro(const unsigned long vaddr, unsigned long len)
     _flush_tlb_all();
 }
 
-int override_symbol(const char *name, const void *new_sym_ptr, void * *org_sym_ptr, unsigned char *org_sym_code)
+/**
+ * Wrapper for set_mem_rw() which works with symbols
+ */
+static void __always_inline set_symbol_rw(struct override_symbol_inst *sym)
 {
-    pr_loc_dbg("Overriding %s() with %pf()<%p>", name, new_sym_ptr, new_sym_ptr);
-
-    *org_sym_ptr = (void *)kallsyms_lookup_name(name);
-    if (*org_sym_ptr == 0) {
-        pr_loc_err("Failed to locate vaddr for %s()", name);
-        return -EFAULT;
-    }
-    pr_loc_dbg("Found %s() @ <%p>", name, *org_sym_ptr);
-
-    //First generate jump new_sym_ptr
-    unsigned char jump[OVERRIDE_JUMP_SIZE];
-    memcpy(jump, jump_tpl, OVERRIDE_JUMP_SIZE);
-    *(long *)&jump[JUMP_ADDR_POS] = (long)new_sym_ptr;
-    pr_loc_dbg("Generated jump to f()<%p> for %s()<%p>: "
-               "%02x%02x %02x%02x%02x%02x%02x%02x%02x%02x %02x%02x",
-               new_sym_ptr, name, *org_sym_ptr,
-               jump[0],jump[1], jump[2],jump[3],jump[4],jump[5],jump[6],jump[7],jump[8],jump[9], jump[10],jump[11]);
-
-    memcpy(org_sym_code, *org_sym_ptr, OVERRIDE_JUMP_SIZE); //Backup old code
-
-    set_mem_rw((long)*org_sym_ptr, OVERRIDE_JUMP_SIZE);
-    pr_loc_dbg("Writing jump code to <%p>", *org_sym_ptr);
-    memcpy(*org_sym_ptr, jump, OVERRIDE_JUMP_SIZE);
-    set_mem_ro((long)*org_sym_ptr, OVERRIDE_JUMP_SIZE);
-
-    pr_loc_dbg("Override for %s set up with %p", name, new_sym_ptr);
-    return 0;
+    set_mem_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
+    sym->mem_protected = true;
 }
 
-struct override_symbol_inst {
-    void *org_sym_ptr;
-    const void *new_sym_ptr;
-    char org_sym_code[OVERRIDE_JUMP_SIZE];
-    char trampoline[OVERRIDE_JUMP_SIZE];
-    spinlock_t lock;
-    unsigned long lock_irq;
-    bool installed:1; //whether the symbol is currently overrode (=has trampoline installed)
-    bool has_trampoline:1; //does this structure contain a valid trampoline code already?
-    bool mem_protected:1; //is the trampoline installation site memory-protected?
-    char name[];
-};
+/**
+ * Wrapper for set_mem_ro() which works with symbols
+ */
+static void __always_inline set_symbol_ro(struct override_symbol_inst *sym)
+{
+    set_mem_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
+    sym->mem_protected = false;
+}
 
+/**
+ * Frees the symbol previously reserved by get_ov_symbol_instance()
+ */
 static inline void put_ov_symbol_instance(struct override_symbol_inst *sym)
 {
     kfree(sym);
 }
 
+/**
+ * Initializes new "override symbol instance" structure
+ *
+ * @return ptr to struct override_symbol_inst or ERR_PTR(-E) on error
+ */
 static struct override_symbol_inst* get_ov_symbol_instance(const char *symbol_name, const void *new_sym_ptr)
 {
     struct override_symbol_inst *sym = kmalloc(
@@ -244,18 +239,6 @@ static struct override_symbol_inst* get_ov_symbol_instance(const char *symbol_na
     return sym;
 }
 
-static void __always_inline enable_mem_protection(struct override_symbol_inst *sym)
-{
-    set_mem_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
-    sym->mem_protected = true;
-}
-
-static void __always_inline disable_mem_protection(struct override_symbol_inst *sym)
-{
-    set_mem_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
-    sym->mem_protected = false;
-}
-
 /**
  * Generates trampoline code to jump from old symbol to the new symbol location and saves the original code
  */
@@ -273,6 +256,14 @@ static inline void prepare_trampoline(struct override_symbol_inst *sym)
     sym->has_trampoline = true;
 }
 
+/**
+ * Enables (previously disabled) symbol override, disabling memory barriers if needed & leaving them disabled upon exit
+ *
+ * Warning: this function is exported only to make universal call original macros working. You should NOT use it outside
+ * of this submodule
+ *
+ * @return 0 on success, -E on error
+ */
 int __enable_symbol_override(struct override_symbol_inst *sym)
 {
     if (unlikely(sym->installed))
@@ -282,7 +273,7 @@ int __enable_symbol_override(struct override_symbol_inst *sym)
         prepare_trampoline(sym);
 
     if (sym->mem_protected)
-        disable_mem_protection(sym);
+        set_symbol_ro(sym);
 
     WITH_OVS_LOCK(sym,
         pr_loc_dbg("Writing trampoline code to <%p>", sym->org_sym_ptr);
@@ -293,13 +284,21 @@ int __enable_symbol_override(struct override_symbol_inst *sym)
     return 0;
 }
 
+/**
+ * Disables (previously enables) symbol override, disabling memory barriers if needed & leaving them disabled upon exit
+ *
+ * Warning: this function is exported only to make universal call original macros working. You should NOT use it outside
+ * of this submodule
+ *
+ * @return 0 on success, -E on error
+ */
 int __disable_symbol_override(struct override_symbol_inst *sym)
 {
     if (unlikely(!sym->installed))
         return 0; //noop but not an error
 
     if (sym->mem_protected)
-        disable_mem_protection(sym);
+        set_symbol_ro(sym);
 
     WITH_OVS_LOCK(sym,
         pr_loc_dbg("Writing original code to <%p>", sym->org_sym_ptr);
@@ -310,17 +309,7 @@ int __disable_symbol_override(struct override_symbol_inst *sym)
     return 0;
 }
 
-__always_inline void * __get_org_ptr(struct override_symbol_inst *sym)
-{
-    return sym->org_sym_ptr;
-}
-
-__always_inline bool symbol_is_overridden(struct override_symbol_inst *sym)
-{
-    return likely(sym) && sym->installed;
-}
-
-struct override_symbol_inst* __must_check override_symbol_ng(const char *name, const void *new_sym_ptr)
+struct override_symbol_inst* __must_check override_symbol(const char *name, const void *new_sym_ptr)
 {
     pr_loc_dbg("Overriding %s() with %pf()<%p>", name, new_sym_ptr, new_sym_ptr);
 
@@ -332,7 +321,7 @@ struct override_symbol_inst* __must_check override_symbol_ng(const char *name, c
     if ((out = __enable_symbol_override(sym)) != 0)
         goto error_out;
 
-    enable_mem_protection(sym); //by design standard override leaves the memory protected
+    set_symbol_rw(sym); //by design standard override leaves the memory protected
 
     pr_loc_dbg("Successfully overrode %s with trampoline to %pF<%p>", sym->name, sym->new_sym_ptr, sym->new_sym_ptr);
     return sym;
@@ -342,7 +331,7 @@ struct override_symbol_inst* __must_check override_symbol_ng(const char *name, c
     return ERR_PTR(out);
 }
 
-int restore_symbol_ng(struct override_symbol_inst *sym)
+int restore_symbol(struct override_symbol_inst *sym)
 {
     pr_loc_dbg("Restoring %s<%p> to original code", sym->name, sym->org_sym_ptr);
 
@@ -350,26 +339,13 @@ int restore_symbol_ng(struct override_symbol_inst *sym)
     if ((out = __disable_symbol_override(sym)) != 0)
         goto out_free;
 
-    enable_mem_protection(sym); //by design restore leaves the memory protected
+    set_symbol_rw(sym); //by design restore leaves the memory protected
 
     pr_loc_dbg("Successfully restored original code of %s", sym->name);
 
     out_free:
     put_ov_symbol_instance(sym);
     return out;
-}
-
-int restore_symbol(void * org_sym_ptr, const unsigned char *org_sym_code)
-{
-    pr_loc_dbg("Restoring symbol @ %pf()<%p>", org_sym_ptr, org_sym_ptr);
-
-    set_mem_rw((long)org_sym_ptr, OVERRIDE_JUMP_SIZE);
-    pr_loc_dbg("Writing original code to <%p>", org_sym_ptr);
-    memcpy(org_sym_ptr, org_sym_code, OVERRIDE_JUMP_SIZE);
-    set_mem_ro((long)org_sym_ptr, OVERRIDE_JUMP_SIZE);
-    pr_loc_dbg("Symbol restored @ %pf()<%p>", org_sym_ptr, org_sym_ptr);
-
-    return 0;
 }
 
 static unsigned long *syscall_table_ptr = NULL;
@@ -460,7 +436,7 @@ static int find_sys_call_table(void)
     return -EFAULT;
 }
 
-static unsigned long *overridden_syscall[NR_syscalls] = { NULL };
+static unsigned long *overridden_syscall[NR_syscalls] = { NULL }; //@todo this should be alloced dynamically
 int override_syscall(unsigned int syscall_num, const void *new_sysc_ptr, void * *org_sysc_ptr)
 {
     pr_loc_dbg("Overriding syscall #%d with %pf()<%p>", syscall_num, new_sysc_ptr, new_sysc_ptr);
@@ -532,4 +508,20 @@ int restore_syscall(unsigned int syscall_num)
     print_syscall_table(syscall_num-5, syscall_num+5);
 
     return 0;
+}
+
+/**
+ * Returns pointer to original symbol. This is a function made to avoid exposing internals of the struct to header.
+ */
+__always_inline void * __get_org_ptr(struct override_symbol_inst *sym)
+{
+    return sym->org_sym_ptr;
+}
+
+/**
+ * Checks if override is enabled. This is a function made to avoid exposing internals of the struct to header.
+ */
+__always_inline bool symbol_is_overridden(struct override_symbol_inst *sym)
+{
+    return likely(sym) && sym->installed;
 }

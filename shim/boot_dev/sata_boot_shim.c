@@ -402,7 +402,7 @@ static void inline probe_existing_devices(struct device_driver *drv)
 }
 
 /**************************************** Handling not-yet-loaded SCSI driver *****************************************/
-DEFINE_OVSYMBOL_PTRS(scsi_register_driver);
+static override_symbol_inst *ov_scsi_register_driver = NULL;
 extern struct bus_type scsi_bus_type;
 
 /**
@@ -414,17 +414,16 @@ static int start_scsi_register_driver_watcher(void)
 {
     pr_loc_dbg("Overriding scsi_register_driver to watch for SCSI driver registration");
 
-    if (unlikely(scsi_register_driver_addr)) {
+    if (unlikely(ov_scsi_register_driver)) {
         pr_loc_bug("Called %s after it's already registered", __FUNCTION__);
         return 0; //technically it's not an error as it's working
     }
 
-    ALLOC_OVSYMBOL_PTRS(scsi_register_driver);
-    int out = override_symbol("scsi_register_driver", scsi_register_driver_shim, &scsi_register_driver_addr,
-                              scsi_register_driver_code);
-    if (out != 0) {
-        pr_loc_err("Failed to override scsi_register_driver - we will miss the driver loading");
-        FREE_OVSYMBOL_PTRS(scsi_register_driver);
+    ov_scsi_register_driver = override_symbol("scsi_register_driver", scsi_register_driver_shim);
+    if (unlikely(IS_ERR(ov_scsi_register_driver))) {
+        int out = PTR_ERR(ov_scsi_register_driver);
+        ov_scsi_register_driver = NULL;
+        pr_loc_err("Failed to override scsi_register_driver (error=%d) - we will miss the driver loading", out);
         return out;
     }
 
@@ -438,17 +437,17 @@ static int start_scsi_register_driver_watcher(void)
  */
 static int stop_scsi_register_driver_watcher(void)
 {
-    if (unlikely(!scsi_register_driver_addr)) {
+    if (unlikely(!ov_scsi_register_driver)) {
         //It's a debug log and not bug/warn as we blindly call this function - the watcher may or may not be registered
         // depending on when this module was loaded and if the watcher was even needed (see file comment for details)
         pr_loc_dbg("Called %s but watcher is not registered (you can safely ignore this)", __FUNCTION__);
         return 0; //technically it's not an error as it was removed
     }
 
-    int out = restore_symbol(scsi_register_driver_addr, scsi_register_driver_code);
-    FREE_OVSYMBOL_PTRS(scsi_register_driver);
+    int out = restore_symbol(ov_scsi_register_driver);
+    ov_scsi_register_driver = NULL;
 
-    if (out == 0)
+    if (likely(out == 0))
         pr_loc_dbg("Successfully restored scsi_register_driver");
     else
         pr_loc_err("Failed to restore scsi_register_driver - error=%d", out);

@@ -132,7 +132,7 @@ int register_stealth_sanitize_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACK
     if (!filtrated_cmdline && (out = filtrate_cmdline(cmdline_blacklist)) != 0)
         return out;
 
-    ov_cmdline_proc_show = override_symbol_ng("cmdline_proc_show", cmdline_proc_show_filtered);
+    ov_cmdline_proc_show = override_symbol("cmdline_proc_show", cmdline_proc_show_filtered);
     if (unlikely(IS_ERR(ov_cmdline_proc_show))) {
         out = PTR_ERR(ov_cmdline_proc_show);
         pr_loc_err("Failed to override cmdline_proc_show - error %d", out);
@@ -152,7 +152,7 @@ int unregister_stealth_sanitize_cmdline(void)
         return 0; //Technically it succeeded
     }
 
-    int out = restore_symbol_ng(ov_cmdline_proc_show);
+    int out = restore_symbol(ov_cmdline_proc_show);
     //We deliberately fall through here without checking as we have to free stuff at this point no matter what
 
     kfree(filtrated_cmdline);

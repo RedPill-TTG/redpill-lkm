@@ -348,7 +348,7 @@ static int _apply_relocate_add(Elf64_Shdr *sechdrs, const char *strtab, unsigned
     return -ENOEXEC;
 }
 
-DEFINE_OVSYMBOL_PTRS(apply_relocate_add);
+static override_symbol_inst *ov_apply_relocate_add = NULL;
 /**
  * Enables override of apply_relocate_add() to redirect it to _apply_relocate_add() in order to plug into a moment where
  * process_bios_symbols() can extract the data.
@@ -357,15 +357,14 @@ DEFINE_OVSYMBOL_PTRS(apply_relocate_add);
  */
 static inline int enable_symbols_capture(void)
 {
-    if (unlikely(apply_relocate_add_addr))
+    if (unlikely(ov_apply_relocate_add))
         return 0; //Technically it's working so it's a non-error scenario (and it may happen with modules notification)
 
-    ALLOC_OVSYMBOL_PTRS(apply_relocate_add);
-    int out = override_symbol("apply_relocate_add", _apply_relocate_add, &apply_relocate_add_addr,
-                              apply_relocate_add_code);
-    if (out != 0) {
-        pr_loc_err("Failed to override apply_relocate_add");
-        FREE_OVSYMBOL_PTRS(apply_relocate_add);
+    ov_apply_relocate_add = override_symbol("apply_relocate_add", _apply_relocate_add);
+    if (unlikely(IS_ERR(ov_apply_relocate_add))) {
+        int out = PTR_ERR(ov_apply_relocate_add);
+        ov_apply_relocate_add = NULL;
+        pr_loc_err("Failed to override apply_relocate_add, error=%d", out);
         return out;
     }
 
@@ -379,11 +378,11 @@ static inline int enable_symbols_capture(void)
  */
 static inline int disable_symbols_capture(void)
 {
-    if (!apply_relocate_add_addr) //may have been restored before
+    if (!ov_apply_relocate_add) //may have been restored before
         return 0;
 
-    int out = restore_symbol(apply_relocate_add_addr, apply_relocate_add_code);
-    FREE_OVSYMBOL_PTRS(apply_relocate_add);
+    int out = restore_symbol(ov_apply_relocate_add);
+    ov_apply_relocate_add = NULL;
 
     return out;
 }

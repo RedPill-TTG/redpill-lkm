@@ -90,23 +90,23 @@ typedef struct override_symbol_inst override_symbol_inst;
  *         call_overridden_symbol(print_res, ovi, "No print for you!");
  *         return print_res;
  *     }
- *     ovi = override_symbol_ng("printk", null_printk);
+ *     ovi = override_symbol("printk", null_printk);
  *     if (IS_ERR(ovi)) { ... handle error ... }
  *     ...
- *     restore_symbol_ng(backup_addr, backup_code); //restore backed-up copy of printk()
+ *     restore_symbol(backup_addr, backup_code); //restore backed-up copy of printk()
  *
  * @todo: This should be rewritten using INSN without inline ASM wizardy, but this is much more complex
  */
-struct override_symbol_inst* __must_check override_symbol_ng(const char *name, const void *new_sym_ptr);
+struct override_symbol_inst* __must_check override_symbol(const char *name, const void *new_sym_ptr);
 
 /**
- * Restores symbol overridden by override_symbol_ng()
+ * Restores symbol overridden by override_symbol()
  *
- * For details see override_symbol_ng() docblock
+ * For details see override_symbol() docblock
  *
  * @return 0 on success, -E on error
  */
-int restore_symbol_ng(struct override_symbol_inst *sym);
+int restore_symbol(struct override_symbol_inst *sym);
 
 /**
  * Check if the given symbol override is currently active
@@ -138,42 +138,6 @@ int override_syscall(unsigned int syscall_num, const void *new_sysc_ptr, void * 
  * @return 0 on success, -E on error
  */
 int restore_syscall(unsigned int syscall_num);
-
-/************************************************** Legacy interface **************************************************/
-/**
- * Overrides a kernel symbol with something else of your choice
- *
- * @param name Name of the kernel symbol (function) to override
- * @param new_sym_ptr An address/pointer to a new function
- * @param org_sym_ptr Pointer to some space to save address of the original function (warning: it's a pointer-pointer)
- * @param org_sym_code Pointer to some space to save original function code
- *
- * @return 0 on success, -E on error
- *
- * @example
- *     int null_printk() { return 0; }
- *     void *backup_addr; //A space for a POINTER
- *     unsigned char backup_code[OVERRIDE_JUMP_SIZE] = { '\0' }; //don't forget to actually reserve space
- *     override_symbol("printk",    null_printk,    &backup_addr,                        backup_code);
- *     //               ^           ^               ^                                    ^
- *     //               override    new function    pass a pointer to a pointer-space    save backup of printk()
- *     ...
- *     restore_symbol(backup_addr, backup_code); //restore backed-up copy of printk()
- *
- * @deprecated use override_symbol_ng() instead
- */
-int override_symbol(const char *name, const void *new_sym_ptr, void * *org_sym_ptr, unsigned char *org_sym_code);
-
-/**
- * Restores symbol overridden by override_symbol()
- *
- * For details see override_symbol() docblock
- *
- * @return 0 on success, -E on error
- * @deprecated use restore_symbol_ng() instead
- */
-int restore_symbol(void * org_sym_ptr, const unsigned char *org_sym_code);
-
 
 /****************** Private helpers (should not be used directly by any code outside of this unit!) *******************/
 #include <linux/types.h>

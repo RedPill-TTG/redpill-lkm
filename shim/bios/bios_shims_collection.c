@@ -144,9 +144,10 @@ extern void *funcSYNOSATADiskLedCtrl; //if this explodes one day we need to do k
  * Syno kernel has ifdefs for "MY_ABC_HERE" for syno_ahci_disk_led_enable() and syno_ahci_disk_led_enable_by_port() so
  * we need to check if they really exist and we cannot determine it statically
  */
-DEFINE_OVSYMBOL_PTRS(funcSYNOSATADiskLedCtrl);
-DEFINE_OVSYMBOL_PTRS(syno_ahci_disk_led_enable);
-DEFINE_OVSYMBOL_PTRS(syno_ahci_disk_led_enable_by_port);
+static override_symbol_inst *ov_funcSYNOSATADiskLedCtrl = NULL;
+static override_symbol_inst *ov_syno_ahci_disk_led_enable = NULL;
+static override_symbol_inst *ov_syno_ahci_disk_led_enable_by_port = NULL;
+
 static int funcSYNOSATADiskLedCtrl_shim(int host_num, SYNO_DISK_LED led)
 {
     pr_loc_dbg("Received %s with host=%d led=%d", __FUNCTION__, host_num, led);
@@ -178,43 +179,37 @@ int shim_disk_leds_ctrl(const struct hw_config *hw)
     int out;
     //funcSYNOSATADiskLedCtrl exists on (almost?) all platforms, but it's null on some... go figure ;)
     if (funcSYNOSATADiskLedCtrl) {
-        ALLOC_OVSYMBOL_PTRS(funcSYNOSATADiskLedCtrl);
-        out = override_symbol("funcSYNOSATADiskLedCtrl", funcSYNOSATADiskLedCtrl_shim, &funcSYNOSATADiskLedCtrl_addr,
-                              funcSYNOSATADiskLedCtrl_code);
-        if (out != 0) {
-            pr_loc_err("Failed to shim funcSYNOSATADiskLedCtrl");
-            goto fail;
+        ov_funcSYNOSATADiskLedCtrl = override_symbol("funcSYNOSATADiskLedCtrl", funcSYNOSATADiskLedCtrl_shim);
+        if (unlikely(IS_ERR(ov_funcSYNOSATADiskLedCtrl))) {
+            out = PTR_ERR(ov_funcSYNOSATADiskLedCtrl);
+            ov_funcSYNOSATADiskLedCtrl = NULL;
+            pr_loc_err("Failed to shim funcSYNOSATADiskLedCtrl, error=%d", out);
+            return out;
         }
     }
 
     if (kernel_has_symbol("syno_ahci_disk_led_enable")) {
-        ALLOC_OVSYMBOL_PTRS(syno_ahci_disk_led_enable);
-        out = override_symbol("syno_ahci_disk_led_enable", syno_ahci_disk_led_enable_shim,
-                              &syno_ahci_disk_led_enable_addr, syno_ahci_disk_led_enable_code);
-        if (out != 0) {
-            pr_loc_err("Failed to shim syno_ahci_disk_led_enable");
-            goto fail;
+        ov_syno_ahci_disk_led_enable = override_symbol("syno_ahci_disk_led_enable", syno_ahci_disk_led_enable_shim);
+        if (unlikely(IS_ERR(ov_syno_ahci_disk_led_enable))) {
+            out = PTR_ERR(ov_syno_ahci_disk_led_enable);
+            ov_syno_ahci_disk_led_enable = NULL;
+            pr_loc_err("Failed to shim syno_ahci_disk_led_enable, error=%d", out);
+            return out;
         }
     }
 
     if (kernel_has_symbol("syno_ahci_disk_led_enable_by_port")) {
-        ALLOC_OVSYMBOL_PTRS(syno_ahci_disk_led_enable_by_port);
-        out = override_symbol("syno_ahci_disk_led_enable_by_port", syno_ahci_disk_led_enable_by_port_shim,
-                              &syno_ahci_disk_led_enable_by_port_addr, syno_ahci_disk_led_enable_by_port_code);
-        if (out != 0) {
-            pr_loc_err("Failed to shim syno_ahci_disk_led_enable_by_port");
-            goto fail;
+        ov_syno_ahci_disk_led_enable_by_port = override_symbol("syno_ahci_disk_led_enable_by_port", syno_ahci_disk_led_enable_by_port_shim);
+        if (unlikely(IS_ERR(ov_syno_ahci_disk_led_enable_by_port))) {
+            out = PTR_ERR(ov_syno_ahci_disk_led_enable_by_port);
+            ov_syno_ahci_disk_led_enable_by_port = NULL;
+            pr_loc_err("Failed to shim syno_ahci_disk_led_enable_by_port, error=%d", out);
+            return out;
         }
     }
 
     pr_loc_dbg("Finished %s", __FUNCTION__);
     return 0;
-
-    fail:
-    FREE_OVSYMBOL_PTRS(funcSYNOSATADiskLedCtrl);
-    FREE_OVSYMBOL_PTRS(syno_ahci_disk_led_enable);
-    FREE_OVSYMBOL_PTRS(syno_ahci_disk_led_enable_by_port);
-    return out;
 }
 
 int unshim_disk_leds_ctrl(void)
@@ -223,26 +218,29 @@ int unshim_disk_leds_ctrl(void)
 
     int out;
     bool failed = false;
-    if (funcSYNOSATADiskLedCtrl_addr) {
-        out = restore_symbol(funcSYNOSATADiskLedCtrl_addr, funcSYNOSATADiskLedCtrl_code);
-        if (out != 0) { //falling through to try to unshim others too
-            pr_loc_err("Failed to unshim funcSYNOSATADiskLedCtrl");
+    if (ov_funcSYNOSATADiskLedCtrl) {
+        out = restore_symbol(ov_funcSYNOSATADiskLedCtrl);
+        ov_funcSYNOSATADiskLedCtrl = NULL;
+        if (unlikely(out != 0)) { //falling through to try to unshim others too
+            pr_loc_err("Failed to unshim funcSYNOSATADiskLedCtrl, error=%d", out);
             failed = true;
         }
     }
 
-    if (syno_ahci_disk_led_enable_addr) {
-        out = restore_symbol(syno_ahci_disk_led_enable_addr, syno_ahci_disk_led_enable_code);
-        if (out != 0) { //falling through to try to unshim others too
-            pr_loc_err("Failed to unshim syno_ahci_disk_led_enable");
+    if (ov_syno_ahci_disk_led_enable) {
+        out = restore_symbol(ov_syno_ahci_disk_led_enable);
+        ov_syno_ahci_disk_led_enable = NULL;
+        if (unlikely(out != 0)) { //falling through to try to unshim others too
+            pr_loc_err("Failed to unshim syno_ahci_disk_led_enable, error=%d", out);
             failed = true;
         }
     }
 
-    if (syno_ahci_disk_led_enable_by_port_addr) {
-        out = restore_symbol(syno_ahci_disk_led_enable_by_port_addr, syno_ahci_disk_led_enable_by_port_code);
-        if (out != 0) { //falling through to try to unshim others too
-            pr_loc_err("Failed to unshim syno_ahci_disk_led_enable_by_port");
+    if (ov_syno_ahci_disk_led_enable_by_port) {
+        out = restore_symbol(ov_syno_ahci_disk_led_enable_by_port);
+        ov_syno_ahci_disk_led_enable_by_port = NULL;
+        if (unlikely(out != 0)) {
+            pr_loc_err("Failed to unshim syno_ahci_disk_led_enable_by_port, error=%d", out);
             failed = true;
         }
     }

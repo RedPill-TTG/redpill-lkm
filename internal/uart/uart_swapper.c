@@ -130,7 +130,7 @@ static int __must_check enable_collector_matcher(void)
     if (unlikely(ov_uart_match_port))
         return 0; //it's not a problem is we already enabled it as it's enabled all the time
 
-    ov_uart_match_port = override_symbol_ng("uart_match_port", uart_match_port_collector);
+    ov_uart_match_port = override_symbol("uart_match_port", uart_match_port_collector);
     if (unlikely(IS_ERR(ov_uart_match_port))) {
         int out = PTR_ERR(ov_uart_match_port);
         ov_uart_match_port = NULL;
@@ -150,7 +150,7 @@ static int disable_collector_matcher(void)
     if (unlikely(!ov_uart_match_port))
         return 0; //it's not a problem is we already disabled it
 
-    int out = restore_symbol_ng(ov_uart_match_port);
+    int out = restore_symbol(ov_uart_match_port);
     ov_uart_match_port = NULL;
 
     if (unlikely(out != 0))
