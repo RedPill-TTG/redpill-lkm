@@ -40,6 +40,7 @@
 #include "usb_boot_shim.h"
 #include "../../common.h"
 #include "../../config/runtime_config.h" //struct boot_device & consts
+#include "../../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "../../internal/call_protected.h" //dynamically calling usb_* functions
 #include <linux/notifier.h>
 #include <linux/usb.h>

@@ -52,16 +52,6 @@
   }
 //********************************************************************************************************************//
 
-bool kernel_has_symbol(const char *name) {
-    if (__symbol_get(name)) {
-        __symbol_put(name);
-
-        return true;
-    }
-
-    return false;
-}
-
 DEFINE_UNEXPORTED_SHIM(int, cmdline_proc_show, CP_LIST(struct seq_file *m, void *v), CP_LIST(m, v), -EFAULT);
 DEFINE_UNEXPORTED_SHIM(void, flush_tlb_all, CP_LIST(void), CP_LIST(), __VOID_RETURN__);
 

@@ -52,7 +52,7 @@
 #include "shim_base.h"
 #include "../common.h"
 #include "../internal/override_symbol.h"
-#include "../internal/call_protected.h" //kernel_has_symbol()
+#include "../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "bios/bios_shims_collection.h" //shim_bios_module(), unshim_bios_module(), shim_bios_disk_leds_ctrl()
 #include <linux/notifier.h> //module notification
 #include <linux/module.h> //struct module

@@ -3,7 +3,7 @@
 #include "../../config/runtime_config.h" //hw_config
 #include "rtc_proxy.h"
 #include "../../common.h"
-#include "../../internal/call_protected.h" //kernel_has_symbol()
+#include "../../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "../../internal/override_symbol.h" //shimming leds stuff
 #include <linux/synobios.h> //SYNO_DISK_LED
 

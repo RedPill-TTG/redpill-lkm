@@ -4,8 +4,6 @@
 #include <linux/version.h> //LINUX_VERSION_CODE, KERNEL_VERSION
 #include <linux/types.h> //bool
 
-bool kernel_has_symbol(const char *name);
-
 // ************************** Exports of normally protected functions ************************** //
 
 //A usual macros to make defining them easier & consistent with .c implementation
