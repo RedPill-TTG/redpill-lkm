@@ -102,6 +102,11 @@ int register_execve_interceptor()
 {
     pr_loc_dbg("Registering execve() interceptor");
 
+    if (sys_execve_ovs) {
+        pr_loc_bug("Called %s() while execve() interceptor is already registered", __FUNCTION__);
+        return -EEXIST;
+    }
+
     override_symbol_or_exit_int(sys_execve_ovs, "SyS_execve", SyS_execve_shim);
 
     pr_loc_inf("execve() interceptor registered");
@@ -120,6 +125,7 @@ int unregister_execve_interceptor()
     int out = restore_symbol(sys_execve_ovs);
     if (out != 0)
         return out;
+    sys_execve_ovs = NULL;
 
     //Free all strings duplicated in add_blocked_execve_filename()
     unsigned int idx = 0;
