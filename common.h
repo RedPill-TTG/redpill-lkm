@@ -25,8 +25,15 @@
 #include "compat/string_compat.h"
 #include <linux/types.h> //bool & others
 
+/************************************************** Strings handling **************************************************/
+#define get_static_name(variable) #variable
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define strlen_static(param) (sizeof(param)-1) //gets the size of a string minus trailing nullbyte (useful for partial matches)
+#define strlen_to_size(len) (sizeof(char) * ((len)+1)) //useful for static strings, use strsize() for dynamic ones
+#define strsize(param) strlen_to_size(strlen(param)) //strlen including NULLbyte; useful for kmalloc-ing
+/**********************************************************************************************************************/
 
+/****************************************************** Logging *******************************************************/
 #if STEALTH_MODE >= STEALTH_MODE_NORMAL
 #define pr_loc_crt(fmt, ...)
 #define pr_loc_err(fmt, ...)
@@ -45,7 +52,6 @@
 
 #define pr_loc_bug(fmt, ...) pr_err ( "<%s/%s:%d> !!BUG!! " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #endif //STEALTH_MODE
-
-#define sizeof_str_chunk(param) sizeof(param)-1 //gets the size of a string minus trailing nullbyte (useful for partial matches)
+/**********************************************************************************************************************/
 
 #endif //REDPILLLKM_COMMON_H

@@ -3,7 +3,7 @@
 #include "../internal/call_protected.h" //used to call cmdline_proc_show()
 
 #define ensure_cmdline_param(cmdline_param) \
-    if (strncmp(param_pointer, cmdline_param, sizeof_str_chunk(cmdline_param)) != 0) { return false; }
+    if (strncmp(param_pointer, cmdline_param, strlen_static(cmdline_param)) != 0) { return false; }
 
 #define ensure_cmdline_token(cmdline_param) \
     if (strncmp(param_pointer, cmdline_param, sizeof(cmdline_param)) != 0) { return false; }
@@ -19,7 +19,7 @@ static bool extract_hw(syno_hw *model, const char *param_pointer)
 {
     ensure_cmdline_param(CMDLINE_KT_HW);
 
-    if (strscpy((char *)model, param_pointer + sizeof_str_chunk(CMDLINE_KT_HW), sizeof(syno_hw)) < 0)
+    if (strscpy((char *)model, param_pointer + strlen_static(CMDLINE_KT_HW), sizeof(syno_hw)) < 0)
         pr_loc_wrn("HW version truncated to %zu", sizeof(syno_hw)-1);
 
     pr_loc_dbg("HW version set to: %s", (char *)model);
@@ -38,7 +38,7 @@ static bool extract_sn(serial_no *sn, const char *param_pointer)
 {
     ensure_cmdline_param(CMDLINE_KT_SN);
 
-    if(strscpy((char *)sn, param_pointer + sizeof_str_chunk(CMDLINE_KT_SN), sizeof(serial_no)) < 0)
+    if(strscpy((char *)sn, param_pointer + strlen_static(CMDLINE_KT_SN), sizeof(serial_no)) < 0)
         pr_loc_wrn("S/N truncated to %zu", sizeof(serial_no)-1);
 
     pr_loc_dbg("S/N set to: %s", (char *)sn);
@@ -50,7 +50,7 @@ static bool extract_boot_media_type(struct boot_media *boot_media, const char *p
 {
     ensure_cmdline_param(CMDLINE_KT_SATADOM);
 
-    char value = param_pointer[sizeof_str_chunk(CMDLINE_KT_SATADOM)];
+    char value = param_pointer[strlen_static(CMDLINE_KT_SATADOM)];
     if (likely(value == '1')) {
         boot_media->type = BOOT_MEDIA_SATA;
         pr_loc_dbg("Boot media SATADOM requested");
@@ -80,7 +80,7 @@ static bool extract_vid(device_id *user_vid, const char *param_pointer)
     ensure_cmdline_param(CMDLINE_CT_VID);
 
     long long numeric_param;
-    int tmp_call_res = kstrtoll(param_pointer + sizeof_str_chunk(CMDLINE_CT_VID), 0, &numeric_param);
+    int tmp_call_res = kstrtoll(param_pointer + strlen_static(CMDLINE_CT_VID), 0, &numeric_param);
     if (unlikely(tmp_call_res != 0)) {
         pr_loc_err("Call to %s() failed => %d", "kstrtoll", tmp_call_res);
         return true;
@@ -114,7 +114,7 @@ static bool extract_pid(device_id *user_pid, const char *param_pointer)
     ensure_cmdline_param(CMDLINE_CT_PID);
 
     long long numeric_param;
-    int tmp_call_res = kstrtoll(param_pointer + sizeof_str_chunk(CMDLINE_CT_PID), 0, &numeric_param);
+    int tmp_call_res = kstrtoll(param_pointer + strlen_static(CMDLINE_CT_PID), 0, &numeric_param);
     if (unlikely(tmp_call_res != 0)) {
         pr_loc_err("Call to %s() failed => %d", "kstrtoll", tmp_call_res);
         return true;
@@ -160,7 +160,7 @@ static bool extract_dom_max_size(struct boot_media *boot_media, const char *para
 {
     ensure_cmdline_param(CMDLINE_CT_DOM_SZMAX);
 
-    long size_mib = simple_strtol(param_pointer + sizeof_str_chunk(CMDLINE_KT_NETIF_NUM), NULL, 10);
+    long size_mib = simple_strtol(param_pointer + strlen_static(CMDLINE_KT_NETIF_NUM), NULL, 10);
     if (size_mib <= 0) {
         pr_loc_err("Invalid maximum size of SATA DoM (\"%s=%ld\")", CMDLINE_KT_NETIF_NUM, size_mib);
         return true;
@@ -183,7 +183,7 @@ static bool extract_port_thaw(bool *port_thaw, const char *param_pointer)
 {
     ensure_cmdline_param(CMDLINE_KT_THAW);
 
-    short value = param_pointer[sizeof_str_chunk(CMDLINE_KT_THAW)];
+    short value = param_pointer[strlen_static(CMDLINE_KT_THAW)];
 
     if (value == '0') {
         *port_thaw = false;
@@ -215,7 +215,7 @@ static bool extract_netif_num(unsigned short *netif_num, const char *param_point
 {
     ensure_cmdline_param(CMDLINE_KT_NETIF_NUM);
 
-    short value = *(param_pointer + sizeof_str_chunk(CMDLINE_KT_NETIF_NUM)) - 48; //ASCII: 0=48 and 9=57
+    short value = *(param_pointer + strlen_static(CMDLINE_KT_NETIF_NUM)) - 48; //ASCII: 0=48 and 9=57
 
     if (value == 0) {
         pr_loc_wrn("You specified no network interfaces (\"%s=0\")", CMDLINE_KT_NETIF_NUM);
@@ -244,7 +244,7 @@ static bool extract_netif_num(unsigned short *netif_num, const char *param_point
  */
 static bool extract_netif_macs(mac_address *macs[MAX_NET_IFACES], const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_KT_MACS, sizeof_str_chunk(CMDLINE_KT_MACS)) == 0) {
+    if (strncmp(param_pointer, CMDLINE_KT_MACS, strlen_static(CMDLINE_KT_MACS)) == 0) {
         //TODO: implement macs=
         pr_loc_err("\"%s\" is not implemented, use %s...%s instead >>>%s<<<", CMDLINE_KT_MACS, CMDLINE_KT_MAC1,
                    CMDLINE_KT_MAC4, param_pointer);
@@ -269,9 +269,8 @@ static bool extract_netif_macs(mac_address *macs[MAX_NET_IFACES], const char *pa
             goto out_found;
         }
 
-        if(strscpy((char *)macs[i], param_pointer + sizeof_str_chunk(CMDLINE_KT_MAC1), sizeof(mac_address)) < 0)
+        if(strscpy((char *)macs[i], param_pointer + strlen_static(CMDLINE_KT_MAC1), sizeof(mac_address)) < 0)
             pr_loc_wrn("MAC #%d truncated to %zu", i+1, sizeof(mac_address)-1);
-
 
         pr_loc_dbg("Set MAC #%d: %s", i+1, (char *)macs[i]);
         goto out_found;

@@ -45,7 +45,7 @@ static void patch_dmi(void)
     pr_loc_dbg("Saved backup DMI: %s", dmi_product_name_backup);
 
     //This TECHNICALLY can cause overflow but DMI has buffer for such a short string
-    if (org_len < sizeof_str_chunk(FW_BOARD_NAME))
+    if (org_len < strlen_static(FW_BOARD_NAME))
         pr_loc_bug("Shimmed DMI field will be longer than original!");
 
     strcpy(ptr, FW_BOARD_NAME);
