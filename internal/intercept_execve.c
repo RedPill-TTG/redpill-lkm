@@ -52,15 +52,10 @@ int add_blocked_execve_filename(const char *filename)
         }
     }
 
-    intercepted_filenames[idx] = kmalloc(strlen(filename)+1, GFP_KERNEL);
+    kmalloc_or_exit_int(intercepted_filenames[idx], strsize(filename));
     strcpy(intercepted_filenames[idx], filename); //Size checked above
-    if (!intercepted_filenames[idx]) {
-        pr_loc_crt("kmalloc failure!");
-        return -ENOMEM;
-    }
 
     pr_loc_inf("Filename %s will be blocked from execution", filename);
-
     return 0;
 }
 

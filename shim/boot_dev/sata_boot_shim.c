@@ -181,11 +181,8 @@ static long long opportunistic_read_capacity(struct scsi_device *sdp)
     //to prevent false-positive "command failed" we need to try both
     bool use_cap16 = true;
 
-    unsigned char *buffer = kmalloc(SCSI_BUF_SIZE, GFP_KERNEL);
-    if (!buffer) {
-        pr_loc_crt("kmalloc failure");
-        return -EFAULT;
-    }
+    unsigned char *buffer = NULL;
+    kmalloc_or_exit_int(buffer, SCSI_BUF_SIZE);
 
     int out;
     int sense_valid = 0;

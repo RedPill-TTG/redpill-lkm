@@ -33,6 +33,30 @@
 #define strsize(param) strlen_to_size(strlen(param)) //strlen including NULLbyte; useful for kmalloc-ing
 /**********************************************************************************************************************/
 
+/****************************************** Dynamic memory allocation helpers *****************************************/
+//[internal] Cleans up & provides standard reporting and return
+#define __kalloc_err_report_clean(variable, size, exit) \
+    (variable) = NULL; \
+    pr_loc_crt("kernel memory alloc failure - tried to allocate %ld bytes for %s", \
+               (long)(size), get_static_name(variable)); \
+    return exit;
+
+//Use these if you need to do a manual malloc with some extra checks but want to return a consistant message
+#define kalloc_error_int(variable, size) do { __kalloc_err_report_clean(variable, size, -ENOMEM); } while(0);
+#define kalloc_error_ptr(variable, size) do { __kalloc_err_report_clean(variable, size, ERR_PTR(-ENOMEM)); } while(0);
+
+//[internal] Reserves memory & checks result
+#define __kalloc_or_exit(type, variable, size, exit_type) \
+    (variable) = (type)(size, GFP_KERNEL); \
+    if (unlikely(!(variable))) { kalloc_error_ ## exit_type (variable, size); }
+
+//Use these to do a standard malloc with error reporting
+#define kmalloc_or_exit_int(variable, size) do { __kalloc_or_exit(kmalloc, variable, size, int); } while(0);
+#define kmalloc_or_exit_ptr(variable, size) do { __kalloc_or_exit(kmalloc, variable, size, ptr); } while(0);
+#define kzalloc_or_exit_int(variable, size) do { __kalloc_or_exit(kzalloc, variable, size, int); } while(0);
+#define kzalloc_or_exit_ptr(variable, size) do { __kalloc_or_exit(kzalloc, variable, size, ptr); } while(0);
+/**********************************************************************************************************************/
+
 /****************************************************** Logging *******************************************************/
 #if STEALTH_MODE >= STEALTH_MODE_NORMAL
 #define pr_loc_crt(fmt, ...)

@@ -93,7 +93,7 @@ void RPDBG_print_execve_call(const char *filename, const char __user *const __us
     int argc = count_args(argv_up);
 
     char *arg_str = kzalloc(MAX_ARG_STRLEN, GFP_KERNEL);
-    if (!arg_str) {
+    if (unlikely(!arg_str)) {
         pr_loc_crt("kzalloc failed");
         return;
     }

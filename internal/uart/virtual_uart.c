@@ -256,22 +256,13 @@ static int alloc_fifos(struct serial8250_16550A_vdev *vdev)
         return -EINVAL;
     }
 
-    vdev->rx_fifo = kzalloc(sizeof(struct kfifo), GFP_KERNEL);
-    if (unlikely(!vdev->rx_fifo)) {
-        pr_loc_crt("kzalloc for RX FIFO struct @ %d failed", vdev->line);
-        return -EFAULT;
-    }
-
     if (unlikely(vdev->tx_fifo)) { //this shouldn't happen on non-initialized port
         pr_loc_bug("TX FIFO @ %d already alloc'd", vdev->line);
         return -EINVAL;
     }
 
-    vdev->tx_fifo = kzalloc(sizeof(struct kfifo), GFP_KERNEL);
-    if (unlikely(!vdev->tx_fifo)) {
-        pr_loc_crt("kzalloc for TX FIFO struct @ %d failed", vdev->line);
-        return -EFAULT;
-    }
+    kzalloc_or_exit_int(vdev->rx_fifo, sizeof(struct kfifo));
+    kzalloc_or_exit_int(vdev->tx_fifo, sizeof(struct kfifo));
 
     if (unlikely(kfifo_alloc(vdev->rx_fifo, VUART_FIFO_LEN, GFP_KERNEL) != 0)) {
         pr_loc_crt("kfifo_alloc for RX FIFO elements @ %d failed", vdev->line);
@@ -661,11 +652,7 @@ static int initialize_ttyS(struct serial8250_16550A_vdev *vdev)
     if ((out = alloc_fifos(vdev) != 0))
         return out;
 
-    vdev->lock = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
-    if (!unlikely(vdev->lock)) {
-        pr_loc_dbg("kmalloc failed to allocate memory for vUART spinlock");
-        return -EFAULT;
-    }
+    kmalloc_or_exit_int(vdev->lock, sizeof(spinlock_t));
     spin_lock_init(vdev->lock);
 
     //virq_* stuff is allocated/freed by enable_/disable_interrupts()
@@ -829,7 +816,8 @@ static int update_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
     }
 
 
-    struct uart_8250_port *up = kzalloc(sizeof(struct uart_8250_port), GFP_KERNEL);
+    struct uart_8250_port *up;
+    kzalloc_or_exit_int(up, sizeof(struct uart_8250_port));
     struct uart_port *port = &up->port;
 
     port->line = vdev->line;
@@ -889,7 +877,8 @@ static int restore_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
         return 0; //not an error as technically the port is NOT in the driver
     }
 
-    struct uart_8250_port *up = kzalloc(sizeof(struct uart_8250_port), GFP_KERNEL);
+    struct uart_8250_port *up;
+    kzalloc_or_exit_int(up, sizeof(struct uart_8250_port));
     struct uart_port *port = &up->port;
 
     port->line = vdev->line;
@@ -942,12 +931,7 @@ int vuart_set_tx_callback(int line, vuart_callback_t *cb, char *buffer, int thre
     pr_loc_dbg("Setting TX callback for for ttyS%d (line=%d)", line, vdev->line);
     line = vdev->line; //this looks to make no sense BUT it does when serials are swapped
     if (likely(!flush_cbs[line])) { //if there was already a cb there we don't need to reserve memory
-        flush_cbs[line] = kmalloc(sizeof(struct flush_callback), GFP_KERNEL);
-        if (unlikely(!flush_cbs[line])) {
-            pr_loc_crt("kmalloc failed");
-            flush_cbs[line] = NULL;
-            return -EFAULT;
-        }
+        kmalloc_or_exit_int(flush_cbs[line], sizeof(struct flush_callback));
     }
 
     //This can technically be called during serial port operation so we need to get a lock before we change these or

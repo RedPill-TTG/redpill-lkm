@@ -264,8 +264,9 @@ static bool extract_netif_macs(mac_address *macs[MAX_NET_IFACES], const char *pa
             continue;
 
         macs[i] = kmalloc(sizeof(mac_address), GFP_KERNEL);
-        if (!macs[i]) {
-            pr_loc_crt("Failed to reserve %zu bytes of memory", sizeof(mac_address));
+        if (unlikely(!macs[i])) {
+            pr_loc_crt("kernel memory alloc failure - tried to allocate %lu bytes for macs[%d]", sizeof(mac_address),
+                       i);
             goto out_found;
         }
 
@@ -340,11 +341,7 @@ long get_kernel_cmdline(char *cmdline_out, size_t maxlen)
     return strscpy(cmdline_out, cmdline_cache, maxlen);
 }
 
-#define ADD_BLACKLIST_ENTRY(idx, token) cmdline_blacklist[idx] = kmalloc(sizeof(token), GFP_KERNEL); \
-                                        if (unlikely(!cmdline_blacklist[idx])) {                     \
-                                            pr_loc_crt("kmalloc failed");                            \
-                                            return -EFAULT;                                          \
-                                        }                                                            \
+#define ADD_BLACKLIST_ENTRY(idx, token) kmalloc_or_exit_int(cmdline_blacklist[idx], sizeof(token));  \
                                         strcpy((char *)cmdline_blacklist[idx], token);               \
                                         pr_loc_dbg("Add cmdline blacklist \"%s\" @ %d",              \
                                                    (char *)cmdline_blacklist[idx], idx);
@@ -367,11 +364,7 @@ int populate_cmdline_blacklist(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_
 int extract_config_from_cmdline(struct runtime_config *config)
 {
     char *cmdline_txt;
-    cmdline_txt = kzalloc(CMDLINE_MAX, GFP_KERNEL); //we want our struct to be empty
-    if (!cmdline_txt) {
-        pr_loc_crt("Failed to reserve %lu bytes of memory", CMDLINE_MAX*sizeof(char));
-        return -EFAULT; //no free due to kmalloc failure
-    }
+    kzalloc_or_exit_int(cmdline_txt, strlen_to_size(CMDLINE_MAX));
 
     if(get_kernel_cmdline(cmdline_txt, CMDLINE_MAX) <= 0) {
         pr_loc_crt("Failed to extract cmdline");

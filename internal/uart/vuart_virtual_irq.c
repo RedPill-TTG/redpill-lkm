@@ -80,8 +80,8 @@ int vuart_enable_interrupts(struct serial8250_16550A_vdev *vdev)
 
     if (!(vdev->virq_queue = kmalloc(sizeof(wait_queue_head_t), GFP_KERNEL)) ||
         !(vdev->virq_thread = kmalloc(sizeof(struct task_struct), GFP_KERNEL))) {
-        out = -EFAULT;
-        pr_loc_bug("kmalloc failed to reserve memory for vIRQ structures");
+        out = -ENOMEM;
+        pr_loc_crt("kernel memory alloc failure - tried to reserve memory for vIRQ structures");
         goto error_unlock_free;
     }
 

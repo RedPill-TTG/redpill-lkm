@@ -161,28 +161,11 @@ static void free_buffers(void)
  */
 static int alloc_buffers(void)
 {
-    uart_buffer = kmalloc(VUART_FIFO_LEN, GFP_KERNEL);
-    if (unlikely(!uart_buffer)) {
-        pr_loc_err("kmalloc failure for uart_buffer");
-        free_buffers();
-        return -ENOMEM;
-    }
+    kmalloc_or_exit_int(uart_buffer, VUART_FIFO_LEN);
+    kmalloc_or_exit_int(work_buffer, WORK_BUFFER_LEN);
+    kmalloc_or_exit_int(hex_print_buffer, HEX_BUFFER_LEN);
 
-    work_buffer = kmalloc(WORK_BUFFER_LEN, GFP_KERNEL);
-    if (unlikely(!work_buffer)) {
-        pr_loc_err("kmalloc failure for work_buffer");
-        free_buffers();
-        return -ENOMEM;
-    }
     work_buffer_curr = work_buffer;
-
-
-    hex_print_buffer = kmalloc(HEX_BUFFER_LEN, GFP_KERNEL);
-    if (unlikely(!hex_print_buffer)) {
-        pr_loc_err("kmalloc failure for hex_print_buffer");
-        free_buffers();
-        return -ENOMEM;
-    }
 
     return 0;
 }
@@ -366,7 +349,7 @@ int register_pmu_shim(const struct hw_config *hw)
         return out;
     }
 
-    if ((out = alloc_buffers()) != 0) //it will already print a specific error message and do free_buffers() if needed
+    if ((out = alloc_buffers()) != 0)
         goto error_out;
 
     //We don't set the threshold as some commands are variable length but the "packets" are properly split
@@ -379,6 +362,7 @@ int register_pmu_shim(const struct hw_config *hw)
     return 0;
 
     error_out:
+    free_buffers();
     vuart_remove_device(PMU_TTYS_LINE); //this also removes callback (if set)
     return out;
 }

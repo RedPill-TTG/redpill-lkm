@@ -61,11 +61,8 @@ is_token_blacklisted(const char *param_pointer, cmdline_token *cmdline_blacklist
  */
 static int filtrate_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMDLINE_TOKENS])
 {
-    char *raw_cmdline = kmalloc_array(CMDLINE_MAX, sizeof(char), GFP_KERNEL);
-    if (unlikely(!raw_cmdline)) {
-        pr_loc_crt("kmalloc_array failed");
-        return -EFAULT; //no free due to kmalloc failure
-    }
+    char *raw_cmdline;
+    kmalloc_or_exit_int(raw_cmdline, strlen_to_size(CMDLINE_MAX));
 
     long cmdline_len = get_kernel_cmdline(raw_cmdline, CMDLINE_MAX);
     if(unlikely(cmdline_len < 0)) { //if <0 it's an error code
@@ -74,12 +71,10 @@ static int filtrate_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMD
         return (int) cmdline_len;
     }
 
-    filtrated_cmdline = kmalloc_array(cmdline_len + 1, sizeof(char), GFP_KERNEL);
+    filtrated_cmdline = kmalloc(strlen_to_size(cmdline_len), GFP_KERNEL);
     if (unlikely(!filtrated_cmdline)) {
-        pr_loc_crt("kmalloc_array failed");
-        filtrated_cmdline = NULL;
         kfree(raw_cmdline);
-        return -EFAULT; //no free due to kmalloc failure
+        kalloc_error_int(filtrated_cmdline, strlen_to_size(cmdline_len));
     }
 
     char *single_param_chunk; //Pointer to the beginning of the cmdline token

@@ -97,6 +97,7 @@
 #include <linux/string.h> //memcpy()
 
 #define JUMP_ADDR_POS 2 //JUMP starts at [2] in the jump template below
+#define OVERRIDE_JUMP_SIZE 1 + 1 + 8 + 1 + 1 //MOVQ + %rax + $vaddr + JMP + *%rax
 static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
     "\x48\xb8" "\x00\x00\x00\x00\x00\x00\x00\x00" /* MOVQ 64-bit-vaddr, %rax */
     "\xff\xe0" /* JMP *%rax */
@@ -214,12 +215,8 @@ static inline void put_ov_symbol_instance(struct override_symbol_inst *sym)
  */
 static struct override_symbol_inst* get_ov_symbol_instance(const char *symbol_name, const void *new_sym_ptr)
 {
-    struct override_symbol_inst *sym = kmalloc(
-            sizeof(struct override_symbol_inst) + sizeof(char) * (strlen(symbol_name) + 1), GFP_KERNEL);
-    if (unlikely(!sym)) {
-        pr_loc_crt("kmalloc failed");
-        return ERR_PTR(-ENOMEM);
-    }
+    struct override_symbol_inst *sym;
+    kmalloc_or_exit_ptr(sym, sizeof(struct override_symbol_inst) + strsize(symbol_name));
 
     sym->new_sym_ptr = new_sym_ptr;
     spin_lock_init(&sym->lock);

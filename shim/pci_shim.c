@@ -16,12 +16,9 @@ static struct pci_dev_descriptor *allocate_vpci_dev_dsc(void) {
         pr_loc_bug("No more device indexes are available (max devs: %d)", MAX_VPCI_DEVS);
         return ERR_PTR(-ENOMEM);
     }
+
     struct pci_dev_descriptor *dev_dsc;
-    dev_dsc = kmalloc(sizeof(struct pci_dev_descriptor), GFP_KERNEL);
-    if (!dev_dsc) {
-        pr_loc_crt("kmalloc failed");
-        return ERR_PTR(-EFAULT);
-    }
+    kmalloc_or_exit_ptr(dev_dsc, sizeof(struct pci_dev_descriptor));
     memcpy(dev_dsc, &pci_dev_conf_default_normal_dev, sizeof(struct pci_dev_descriptor));
     devices[free_dev_idx++] = dev_dsc;
 

@@ -412,7 +412,7 @@ static inline struct pci_bus *get_vbus_by_number(unsigned char bus_no)
     return NULL;
 }
 
-const struct virtual_device *
+const __must_check struct virtual_device *
 vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no, void *descriptor)
 {
     pr_loc_dbg("Attempting to add vPCI device [printed below] @ bus=%02x dev=%02x fn=%02x", bus_no, dev_no, fn_no);
@@ -425,7 +425,9 @@ vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
     struct pci_bus *bus = get_vbus_by_number(bus_no);
 
     //At this point we know the device can be added either to a new or existing bus so we have to populate their struct
-    struct virtual_device *device = kmalloc(sizeof(struct virtual_device), GFP_KERNEL);
+    struct virtual_device *device;
+    kmalloc_or_exit_ptr(device, sizeof(struct virtual_device));
+
     device->dev_no = dev_no;
     device->fn_no = fn_no;
     device->descriptor = descriptor;

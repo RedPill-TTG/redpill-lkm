@@ -206,13 +206,7 @@ driver_watcher_instance *watch_driver_register(const char *name, watch_dr_callba
         return ERR_PTR(-ENOSPC);
     }
 
-    *watcher_lptr = kmalloc(sizeof(driver_watcher_instance) + (sizeof(char) * strlen(name) + 1), GFP_KERNEL);
-    if (unlikely(!*watcher_lptr)) {
-        pr_loc_err("kmalloc failed");
-        *watcher_lptr = NULL;
-        return ERR_PTR(-ENOMEM);
-    }
-
+    kmalloc_or_exit_ptr(*watcher_lptr, sizeof(driver_watcher_instance) + strsize(name));
     strcpy((*watcher_lptr)->name, name);
     (*watcher_lptr)->cb = cb;
     (*watcher_lptr)->notify_coming = ((event_mask & DWATCH_STATE_COMING) == DWATCH_STATE_COMING);
