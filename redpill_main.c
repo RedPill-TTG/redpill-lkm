@@ -12,7 +12,7 @@
 #include "shim/disable_exectutables.h" //Disable common problematic executables
 #include "shim/pci_shim.h" //Handles PCI devices emulation
 #include "shim/storage/smart_shim.h" //Handles emulation of SMART data for devices without it
-#include "shim/storage/virtio_storage_shim.h" //Handles VirtIO storage devices/disks peculiarities
+#include "shim/storage/sata_port_shim.h" //Handles VirtIO & SAS storage devices/disks peculiarities
 #include "shim/uart_fixer.h" //Various fixes for UART weirdness
 #include "shim/pmu_shim.h" //Emulates the platform management unit
 
@@ -50,7 +50,7 @@ static int __init init_(void)
          || (out = populate_runtime_config(&current_config)) != 0 //This MUST be second
          || (out = register_uart_fixer(current_config.hw_config)) != 0 //Fix consoles ASAP
          || (out = register_scsi_notifier()) != 0 //Load SCSI notifier so that boot shim (& others) can use it
-         || (out = register_virtio_storage_shim()) //This should be bfr boot shim as it can fix some things need by boot
+         || (out = register_sata_port_shim()) //This should be bfr boot shim as it can fix some things need by boot
          || (out = register_boot_shim(&current_config.boot_media)) //Make sure we're quick with this one
          || (out = register_execve_interceptor()) != 0 //Register this reasonably high as other modules can use it blindly
          || (out = register_bios_shim(current_config.hw_config)) != 0
@@ -96,7 +96,7 @@ static void __exit cleanup_(void)
         unregister_bios_shim,
         unregister_execve_interceptor,
         unregister_boot_shim,
-        unregister_virtio_storage_shim,
+        unregister_sata_port_shim,
         unregister_scsi_notifier,
         unregister_uart_fixer
     };

@@ -20,7 +20,7 @@ SRCS-y  += compat/string_compat.c \
 		   shim/boot_dev/boot_shim_base.c shim/boot_dev/usb_boot_shim.c shim/boot_dev/fake_sata_boot_shim.c \
 		   shim/boot_dev/native_sata_boot_shim.c shim/boot_device_shim.c \
 		   \
-		   shim/storage/smart_shim.c shim/storage/virtio_storage_shim.c \
+		   shim/storage/smart_shim.c shim/storage/sata_port_shim.c \
 		   shim/bios/bios_hwcap_shim.c shim/bios/bios_hwmon_shim.c shim/bios/rtc_proxy.c \
 		   shim/bios/bios_shims_collection.c shim/bios_shim.c \
 		   shim/block_fw_update_shim.c shim/disable_exectutables.c shim/pci_shim.c shim/pmu_shim.c shim/uart_fixer.c \

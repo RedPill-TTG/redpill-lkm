@@ -30,7 +30,7 @@
  * References
  *   - drivers/scsi/sd.c in Linux sources
  */
-#include "virtio_storage_shim.h"
+#include "sata_port_shim.h"
 #include "../shim_base.h"
 #include "../../common.h"
 #include "../../internal/scsi/scsi_toolbox.h" //scsi_force_replug()
@@ -38,7 +38,7 @@
 #include <scsi/scsi_device.h> //struct scsi_device
 #include <scsi/scsi_host.h> //struct Scsi_Host, SYNO_PORT_TYPE_*
 
-#define SHIM_NAME "VirtIO storage"
+#define SHIM_NAME "SATA port emulator"
 #define VIRTIO_HOST_ID "Virtio SCSI HBA"
 
 /**
@@ -112,7 +112,7 @@ static struct notifier_block scsi_disk_nb = {
     .priority = INT_MIN, //we want to be FIRST so that we other things can get the correct drive type
 };
 
-int register_virtio_storage_shim(void)
+int register_sata_port_shim(void)
 {
     shim_reg_in();
 
@@ -136,7 +136,7 @@ int register_virtio_storage_shim(void)
     return 0;
 }
 
-int unregister_virtio_storage_shim(void)
+int unregister_sata_port_shim(void)
 {
     shim_ureg_in();
 

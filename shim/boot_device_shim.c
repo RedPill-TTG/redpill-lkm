@@ -19,7 +19,7 @@
  *      - has platform dependent vendor/model strings of CONFIG_SYNO_SATA_DOM_VENDOR/CONFIG_SYNO_SATA_DOM_MODEL
  *      - has platform dependent vendor/model strings of CONFIG_SYNO_SATA_DOM_VENDOR_SECOND_SRC/CONFIG_SYNO_SATA_DOM_MODEL_SECOND_SRC
  *      - SATA DOM *cannot* be used to force-reinstall (as there isn't an equivalent of USB's VID/PID of 0xf401/0xf401)
- *      - restrictions of native SATA-DOM are lifted by virtio_storage_shim.c and fake_sata_boot_shim.c
+ *      - restrictions of native SATA-DOM are lifted by sata_port_shim.c and fake_sata_boot_shim.c
  *
  * There are other special ones (e.g. iSCSI) which aren't supported here. These only apply to small subset of platforms.
  *
