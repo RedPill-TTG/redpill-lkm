@@ -1,8 +1,11 @@
 #ifndef REDPILL_BOOT_SHIM_BASE_H
 #define REDPILL_BOOT_SHIM_BASE_H
 
+#include <linux/types.h> //bool
+
 struct boot_media;
 struct usb_device;
+struct scsi_device;
 
 /**
  * Modify given USB device instance to conform to syno kernel boot device specification
@@ -39,5 +42,16 @@ void set_shimmed_boot_dev(void *private_data);
  * @return non-NULL pointer if device has been shimmed or NULL ptr if it wasn't
  */
 void *get_shimmed_boot_dev(void);
+
+/**
+ * Checks if a given SCSI disk can become a boot device
+ *
+ * To fully understand the rules and intricacies of how it is used in context you should read the file comment for the
+ * native SATA DOM shim in shim/boot_dev/sata_boot_shim.c
+ *
+ * @param boot_dev_config User-controllable configuration with a threshold for considering an SCSI disk a boot device
+ * @param sdp SCSI device which ideally should be an SCSI disk (as passing any other ones doesn't make sense)
+ */
+bool scsi_is_boot_dev_target(const struct boot_media *boot_dev_config, struct scsi_device *sdp);
 
 #endif //REDPILL_BOOT_SHIM_BASE_H

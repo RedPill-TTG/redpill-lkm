@@ -92,489 +92,180 @@
  */
 #include "sata_boot_shim.h"
 #include "../../common.h"
-#include "../../config/runtime_config.h" //struct boot_device & consts, NATIVE_SATA_DOM_SUPPORTED
+#include "../../config/runtime_config.h" //consts, NATIVE_SATA_DOM_SUPPORTED
 
 #ifdef NATIVE_SATA_DOM_SUPPORTED
+#include "boot_shim_base.h" //set_shimmed_boot_dev(), get_shimmed_boot_dev(), scsi_is_boot_dev_target()
+#include "../shim_base.h" //shim_reg_*(), scsi_ureg_*()
 #include "../../internal/call_protected.h" //scsi_scan_host_selected()
-#include "../../internal/override_symbol.h"
-#include <linux/dma-direction.h> //DMA_FROM_DEVICE
-#include <linux/unaligned/be_byteshift.h> //get_unaligned_be32()
-#include <linux/delay.h> //msleep
-#include <scsi/scsi.h> //cmd consts (e.g. SERVICE_ACTION_IN) and SCAN_WILD_CARD
-#include <scsi/scsi_eh.h> //struct scsi_sense_hdr
-#include <scsi/scsi_host.h> //struct Scsi_Host
-#include <scsi/scsi_transport.h> //struct scsi_transport_template
-#include <scsi/scsi_device.h> //scsi_execute_req()
-#include <scsi/scsi_driver.h> //scsi_register_driver()
+#include "../../internal/scsi/scsi_toolbox.h" //scsi_force_replug(), for_each_scsi_disk()
+#include "../../internal/scsi/scsi_notifier.h" //watching for new devices to shim them as they appear
+#include <scsi/scsi_device.h> //struct scsi_device
 
-#define SCSI_RC16_LEN 32 //originally defined in drivers/scsi/sd.c as RC16_LEN
-#define SCSI_CMD_TIMEOUT (30 * HZ) //originally defined in drivers/scsi/sd.h as SD_TIMEOUT
-#define SCSI_CMD_MAX_RETRIES 5 //normal drives shouldn't fail the command even once
-#define SCSI_CAP_MAX_RETRIES 3
-#define SCSI_BUF_SIZE 512 //originally defined in drivers/scsi/sd.h as SD_BUF_SIZE
+#define SHIM_NAME "native SATA DOM boot device"
 
-//Old kernels used ambiguous constant: https://github.com/torvalds/linux/commit/eb846d9f147455e4e5e1863bfb5e31974bb69b7c
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
-#define SERVICE_ACTION_IN_16 SERVICE_ACTION_IN
-#endif
+static const struct boot_media *boot_dev_config = NULL; //passed to scsi_is_shim_target()
 
-static int scsi_register_driver_shim(struct device_driver *drv);
+//Structure for watching for new devices (via SCSI notifier / scsi_notifier.c event system)
+static int on_new_scsi_disk(struct notifier_block *self, unsigned long state, void *data);
+static struct notifier_block scsi_disk_nb = {
+    .notifier_call = on_new_scsi_disk,
+    .priority = INT_MAX //We want to be LAST, after all other possible fixes has been already applied
+};
 
-/*********************************** Determining SCSI device viability for shimming ***********************************/
+/********************************************* Actual shimming routines ***********************************************/
 /**
- * Issues SCSI "READ CAPACITY (16)" command
- * Make sure you read what this function returns!
+ * Attempts to shim the device passed
  *
- * @param sdp
- * @param buffer Pointer to a buffer of size SCSI_BUF_SIZE
- * @param sshdr Sense header
- * @return 0 on command success, >0 if command failed; if the command failed it MAY be repeated
+ * @return 0 if device was successfully shimmed, -E on error
  */
-static int scsi_read_cap16(struct scsi_device *sdp, unsigned char *buffer, struct scsi_sense_hdr *sshdr)
+static int shim_device(struct scsi_device *sdp)
 {
-    unsigned char cmd[16];
-    memset(cmd, 0, 16);
-    cmd[0] = SERVICE_ACTION_IN_16;
-    cmd[1] = SAI_READ_CAPACITY_16;
-    cmd[13] = SCSI_RC16_LEN;
-    memset(buffer, 0, SCSI_RC16_LEN);
+    pr_loc_dbg("Trying to shim SCSI device vendor=\"%s\" model=\"%s\"", sdp->vendor, sdp->model);
 
-    return scsi_execute_req(sdp, cmd, DMA_FROM_DEVICE, buffer, SCSI_RC16_LEN, sshdr, SCSI_CMD_TIMEOUT,
-                            SCSI_CMD_MAX_RETRIES, NULL);
+    if (get_shimmed_boot_dev()) {
+        pr_loc_wrn("The device should be shimmed but another device has been already shimmed as boot dev."
+                   "Device has been ignored.");
+        return -EEXIST;
+    }
+
+    pr_loc_dbg("Shimming device to vendor=\"%s\" model=\"%s\"", CONFIG_SYNO_SATA_DOM_VENDOR,
+               CONFIG_SYNO_SATA_DOM_MODEL);
+    strcpy((char *)sdp->vendor, CONFIG_SYNO_SATA_DOM_VENDOR);
+    strcpy((char *)sdp->model, CONFIG_SYNO_SATA_DOM_MODEL);
+    set_shimmed_boot_dev(sdp);
+
+    return 0;
 }
 
 /**
- * Issues SCSI "READ CAPACITY (10)" command
- * Make sure you read what this function returns!
+ * Handles registration of newly plugged SCSI/SATA devices. It's called by the SCSI notifier automatically.
  *
- * @param sdp
- * @param buffer Pointer to a buffer of size SCSI_BUF_SIZE
- * @param sshdr Sense header
- * @return 0 on command success, >0 if command failed; if the command failed it MAY be repeated
+ * @return NOTIFY_*
  */
-static int scsi_read_cap10(struct scsi_device *sdp, unsigned char *buffer, struct scsi_sense_hdr *sshdr)
+static __used int on_new_scsi_disk(struct notifier_block *self, unsigned long state, void *data)
 {
-    unsigned char cmd[16];
-    cmd[0] = READ_CAPACITY;
-    memset(&cmd[1], 0, 9);
-    memset(buffer, 0, 8);
+    if (state != SCSI_EVT_DEV_PROBING)
+        return NOTIFY_DONE;
 
-    return scsi_execute_req(sdp, cmd, DMA_FROM_DEVICE, buffer, 8, sshdr, SCSI_CMD_TIMEOUT, SCSI_CMD_MAX_RETRIES, NULL);
-}
+    struct scsi_device *sdp = data;
 
-/**
- * Attempts to read capacity of a device assuming reasonably modern pathway
- *
- * This function (along with scsi_read_cap{10|16}) is loosely based on drivers/scsi/sd.c:sd_read_capacity(). However,
- * this method cuts some corners to be faster as we're expecting rather modern hardware. Additionally, functions from
- * sd.c cannot be used as they're static. Even that some of them can be called using kallsyms they aren't stateless and
- * will cause a KP later on (as they modify the device passed to them).
- * Thus this function should be seen as a way to quickly estimate (as it reports full mebibytes rounded down) the
- * capacity without causing side effects.
- *
- * @param sdp
- * @return capacity in full mebibytes, or -E on error
- */
-static long long opportunistic_read_capacity(struct scsi_device *sdp)
-{
-    //some drives work only with the 16 version but older ones can only accept the older variant
-    //to prevent false-positive "command failed" we need to try both
-    bool use_cap16 = true;
+    pr_loc_dbg("Found new SCSI disk vendor=\"%s\" model=\"%s\": checking boot shim viability", sdp->vendor, sdp->model);
+    if (!scsi_is_boot_dev_target(boot_dev_config, sdp))
+        return NOTIFY_OK;
 
-    unsigned char *buffer = NULL;
-    kmalloc_or_exit_int(buffer, SCSI_BUF_SIZE);
-
-    int out;
-    int sense_valid = 0;
-    struct scsi_sense_hdr sshdr;
-    int read_retry = SCSI_CAP_MAX_RETRIES;
-    do {
-        //It can return 0 or a positive integer; 0 means immediate success where 1 means an error. Depending on the error
-        //the command may be repeated.
-        out = (use_cap16) ? scsi_read_cap16(sdp, buffer, &sshdr) : scsi_read_cap10(sdp, buffer, &sshdr);
-        if (out == 0)
-            break; //command just succeeded
-
-        if (unlikely(out > 0)) { //it's technically an error but we may be able to recover
-            if (use_cap16) { //if we previously used CAP(16) and it failed we can try older CAP(10) [even on hard-fail]
-                use_cap16 = false;
-                continue;
-            }
-
-            //Some failures are hard-failure (e.g. drive doesn't support the cmd), some are soft-failures
-            //In soft failures some are known to take more time (e.g. spinning rust is spinning up) and some should be
-            //fast-repeat. We really only distinguish hard from soft and just wait some time for others
-            //In a normal scenario this path will be cold as the drive will respond to CAP(16) or CAP(10) right away.
-
-            sense_valid = scsi_sense_valid(&sshdr);
-            if (!sense_valid) {
-                pr_loc_dbg("Invalid sense - trying again");
-                continue; //Sense invalid, this can be repeated right away
-            }
-
-            //Drive deliberately rejected the request and indicated that this situtation will not change
-            if (sshdr.sense_key == ILLEGAL_REQUEST && (sshdr.asc == 0x20 || sshdr.asc == 0x24) && sshdr.ascq == 0x00) {
-                pr_loc_err("Drive refused to provide capacity");
-                return -EINVAL;
-            }
-
-            //Drive is busy - wait for some time
-            if (sshdr.sense_key == UNIT_ATTENTION && sshdr.asc == 0x29 && sshdr.ascq == 0x00) {
-                pr_loc_dbg("Drive busy during capacity pre-read (%d attempts left), trying again", read_retry-1);
-                msleep(500); //if it's a spinning rust over USB we may need to wait
-                continue;
-            }
-        }
-    } while (--read_retry);
-
-    if (out != 0) {
-        pr_loc_err("Failed to pre-read capacity of the drive after %d attempts due to SCSI errors",
-                   (SCSI_CAP_MAX_RETRIES - read_retry));
-        kfree(buffer);
-        return -EIO;
+    int err = shim_device(data);
+    if (unlikely(err != 0)) {
+        //If we let the device register it may be misinterpreted as a normal disk and possibly formatted
+        pr_loc_err("Shimming process failed with error=%d - "
+                   "preventing the device from appearing in the OS to avoid possible damage", err);
+        return NOTIFY_BAD;
     }
 
-    unsigned sector_size = get_unaligned_be32(&buffer[8]);
-    unsigned long long lba = get_unaligned_be64(&buffer[0]);
-
-    //Good up to 8192000000 pebibytes - good luck overflowing that :D
-    long long size_mb = ((lba+1) * sector_size) / 1024 / 1024; //sectors * sector size = size in bytes
-
-    kfree(buffer);
-    return size_mb;
+    return NOTIFY_OK;
 }
-
-/**
- * Checks if a given generic device is a disk connected to a SATA port/host controller
- */
-static bool inline is_sata_disk(struct device *dev)
-{
-    //from the kernel's pov SCSI devices include SCSI hosts, "leaf" devices, and others - this filters real SCSI devices
-    if (!scsi_is_sdev_device(dev))
-        return false;
-
-    struct scsi_device *sdp = to_scsi_device(dev);
-
-    //end/leaf devices can be disks or other things - filter only real disks
-    //more than that use syno's private property (hey! not all of their kernel mods are bad ;)) to determine port which
-    //a given device uses (vanilla kernel doesn't care about silly ports - SCSI is SCSI)
-    if (sdp->type != TYPE_DISK || sdp->host->hostt->syno_port_type != SYNO_PORT_TYPE_SATA)
-        return false;
-
-    return true;
-}
-
-static unsigned long max_dom_size_mib = 0; //this will be set during register
-bool device_mapped = false;
-static bool inline is_shim_target(struct scsi_device *sdp)
-{
-    pr_loc_dbg("Checking if SATA disk is a shim target - id=%u channel=%u vendor=\"%s\" model=\"%s\"", sdp->id,
-               sdp->channel, sdp->vendor, sdp->model);
-
-    long long capacity_mib = opportunistic_read_capacity(sdp);
-    if (capacity_mib < 0) {
-        pr_loc_dbg("Failed to estimate drive capacity - it WILL NOT be shimmed");
-        return false;
-    }
-
-    if (capacity_mib > max_dom_size_mib) {
-        pr_loc_dbg("Device has capacity of ~%llu MiB - it WILL NOT be shimmed (>%lu)", capacity_mib, max_dom_size_mib);
-        return false;
-    }
-
-    if (unlikely(device_mapped)) {
-        pr_loc_wrn("Boot device was already shimmed but a new matching device (~%llu MiB <= %lu) appeared again - "
-                   "this may produce unpredictable outcomes! Ignoring - check your hardware", capacity_mib,
-                   max_dom_size_mib);
-        return false;
-    }
-
-    pr_loc_dbg("Device has capacity of ~%llu MiB - it is a shimmable target (<=%lu)", capacity_mib, max_dom_size_mib);
-
-    return true;
-}
-
-/*********************************** Interacting with an active/loaded SCSI driver ************************************/
-static int (*org_sd_probe) (struct device *dev) = NULL; //set during register
-static int sd_probe_shim(struct device *dev)
-{
-    pr_loc_dbg("Probing SCSI device using %s", __FUNCTION__);
-    if (!is_sata_disk(dev)) {
-        pr_loc_dbg("%s: new SCSI device connected - it's not a SATA disk, ignoring", __FUNCTION__);
-        goto proxy;
-    }
-
-    struct scsi_device *sdp = to_scsi_device(dev);
-    if (is_shim_target(sdp)) {
-        pr_loc_dbg("Shimming device to vendor=\"%s\" model=\"%s\"", CONFIG_SYNO_SATA_DOM_VENDOR,
-                   CONFIG_SYNO_SATA_DOM_MODEL);
-        sdp->vendor = CONFIG_SYNO_SATA_DOM_VENDOR;
-        sdp->model = CONFIG_SYNO_SATA_DOM_MODEL;
-        device_mapped = true;
-    }
-
-    proxy:
-    pr_loc_dbg("Handing over probing from %s to %pf", __FUNCTION__, org_sd_probe);
-    return org_sd_probe(dev);
-}
-
-static inline void install_sd_probe_shim(struct device_driver *drv)
-{
-    pr_loc_dbg("Overriding %pf()<%p> with %pf()<%p>", drv->probe, drv->probe, sd_probe_shim, sd_probe_shim);
-    org_sd_probe = drv->probe;
-    drv->probe = sd_probe_shim;
-}
-
-static inline void uninstall_sd_probe_shim(struct device_driver *drv)
-{
-    if (unlikely(!org_sd_probe)) {
-        pr_loc_wrn(
-                "Cannot %s - original drv->probe is not saved. It was either never installed or it's a bug. "
-                "The current drv->probe is %pf()<%p>",
-                __FUNCTION__, drv->probe, drv->probe);
-        return;
-    }
-
-    pr_loc_dbg("Restoring %pf()<%p> to %pf()<%p>", drv->probe, drv->probe, org_sd_probe, org_sd_probe);
-    drv->probe = org_sd_probe;
-    org_sd_probe = NULL;
-}
-
 
 /**
  * Processes existing device and if it's a SATA drive which matches shim criteria it will be unplugged & replugged to be
  * shimmed
  *
- * @return 0 means "continue calling me" while any other value means "I found what I was looking for, stop calling me"
- */
-static int on_existing_device(struct device *dev, void *data)
-{
-    if (!is_sata_disk(dev)) {
-        pr_loc_dbg("Checking existing SCSI device \"%s\" - it's not a SATA disk, ignoring", dev_name(dev));
-        return 0;
-    }
-
-    struct scsi_device *sdp = to_scsi_device(dev);
-
-    //This will ask the device for its capacity again. This isn't done to save code space and consolidate new and old
-    // devices into a common is_shim_target() path. The reason for this is even thou "struct scsi_disk" has the capacity
-    // cached we cannot access it. When this module is built with full kernel sources the "struct scsi_disk" is a
-    // clusterfuck of MY_ABC_HERE and since it resides in non-public header it is completely absent from toolkit builds.
-    if (!is_shim_target(sdp)) {
-        pr_loc_dbg("Device \"%s\" is not a shim target - ignoring", dev_name(dev));
-        return 0;
-    }
-
-    pr_loc_inf("Device is \"%s\" vendor=\"%s\" model=\"%s\" is already connected - forcefully reconnecting to shim",
-               dev_name(dev), sdp->vendor, sdp->model);
-
-    struct Scsi_Host *host = sdp->host;
-    pr_loc_dbg("Removing device from host%d", host->host_no);
-    scsi_remove_device(sdp); //this will do locking for remove
-
-    //See drivers/scsi/scsi_sysfs.c:scsi_scan() for details
-    if (host->transportt->user_scan) {
-        pr_loc_dbg("Triggering template-based rescan of host%d", host->host_no);
-        host->transportt->user_scan(host, SCAN_WILD_CARD, SCAN_WILD_CARD, SCAN_WILD_CARD);
-    } else {
-        pr_loc_dbg("Triggering generic rescan of host%d", host->host_no);
-        //this is unfortunately defined in scsi_scan.c, it can be emulated because it's just bunch of loops, but why?
-        //This will also most likely never be used anyway
-        _scsi_scan_host_selected(host, SCAN_WILD_CARD, SCAN_WILD_CARD, SCAN_WILD_CARD, 1);
-    }
-
-    //We're deliberately not returning non-zero (which will stop scanning) to detect situation where two shimmable devs
-    //are matched and only the first one is used
-    return 0;
-}
-
-/**
- * Scan existing device on the SD driver and try to determine if they're shimmable
- */
-static void inline probe_existing_devices(struct device_driver *drv)
-{
-    int code = bus_for_each_dev(drv->bus, NULL, NULL, on_existing_device);
-    DBG_ALLOW_UNUSED(code);
-
-    pr_loc_dbg("bus_for_each_dev returned %d", code);
-}
-
-/**************************************** Handling not-yet-loaded SCSI driver *****************************************/
-static override_symbol_inst *ov_scsi_register_driver = NULL;
-extern struct bus_type scsi_bus_type;
-
-/**
- * Registers a watcher for situations where SCSI driver we are looking for is not yet registered with the kernel
+ * @param sdp This "struct device" should already be guaranteed to be an scsi_device with type=TYPE_DISK (i.e. returning
+ *            "true" from is_scsi_disk())
  *
- * @return 0 on success, -E on error
+ * @return 0 means "continue calling me" while any other value means "I found what I was looking for, stop calling me".
+ *         This convention is based on how bus_for_each_dev() works
  */
-static int start_scsi_register_driver_watcher(void)
+static int on_existing_scsi_disk(struct scsi_device *sdp)
 {
-    pr_loc_dbg("Overriding scsi_register_driver to watch for SCSI driver registration");
+    pr_loc_dbg("Found existing SCSI disk vendor=\"%s\" model=\"%s\": checking boot shim viability", sdp->vendor,
+               sdp->model);
 
-    if (unlikely(ov_scsi_register_driver)) {
-        pr_loc_bug("Called %s after it's already registered", __FUNCTION__);
-        return 0; //technically it's not an error as it's working
-    }
+    if (!scsi_is_boot_dev_target(boot_dev_config, sdp))
+        return 0;
 
-    ov_scsi_register_driver = override_symbol("scsi_register_driver", scsi_register_driver_shim);
-    if (unlikely(IS_ERR(ov_scsi_register_driver))) {
-        int out = PTR_ERR(ov_scsi_register_driver);
-        ov_scsi_register_driver = NULL;
-        pr_loc_err("Failed to override scsi_register_driver (error=%d) - we will miss the driver loading", out);
-        return out;
-    }
+    //So, now we know it's a shimmable target but we cannot just call shim_device() as this will change vendor+model on
+    // already connected device, which will change these information but will not trigger syno type change. When we
+    // disconnect & reconnect the device it will reappear and go through the on_new_scsi_disk() route.
+    pr_loc_inf("SCSI disk vendor=\"%s\" model=\"%s\" is already connected but it's a boot dev. "
+               "It will be forcefully reconnected to shim it as boot dev.", sdp->vendor, sdp->model);
 
-    return 0;
-}
-
-/**
- * Reverses start_scsi_register_driver_watcher()
- *
- * @return 0 on success, -E on error
- */
-static int stop_scsi_register_driver_watcher(void)
-{
-    if (unlikely(!ov_scsi_register_driver)) {
-        //It's a debug log and not bug/warn as we blindly call this function - the watcher may or may not be registered
-        // depending on when this module was loaded and if the watcher was even needed (see file comment for details)
-        pr_loc_dbg("Called %s but watcher is not registered (you can safely ignore this)", __FUNCTION__);
-        return 0; //technically it's not an error as it was removed
-    }
-
-    int out = restore_symbol(ov_scsi_register_driver);
-    ov_scsi_register_driver = NULL;
-
-    if (likely(out == 0))
-        pr_loc_dbg("Successfully restored scsi_register_driver");
+    int out = scsi_force_replug(sdp);
+    if (out < 0)
+        pr_loc_err("Failed to replug the SCSI device (error=%d) - it may not shim as expected", out);
     else
-        pr_loc_err("Failed to restore scsi_register_driver - error=%d", out);
+        pr_loc_dbg("SCSI device replug triggered successfully");
 
-    return out;
+    return 1;
 }
 
-/**
- * Watches for SCSI sd driver registration and if found replaces original probe callback with sd_probe_shim()
- *
- * This shim doesn't replace the logic in any way - it just serves as a middle man
- *
- * @return 0 on success, -EBUSY on error (following the real command)
- */
-static int scsi_register_driver_shim(struct device_driver *drv)
-{
-    pr_loc_dbg("SCSI driver registering via %s with driver name=%s", __FUNCTION__, drv->name);
-
-    bool is_sd = (strcmp(drv->name, "sd") == 0);
-    if (likely(is_sd)) { //this is usually executed on the very first call to this shim
-        pr_loc_dbg("SCSI driver attempts to register \"sd\" driver - replacing probe");
-        /* Warning: we're chaining the pointer here and this pointer is (as of now) point to a SHARED TEMPLATE in
-         * drivers/scsi/sd.c. That means that this change must be reversed when this module is unloaded. However, this
-         * isn't a big of a problem as during unregister we use driver_find() to restore the probe ptr. If the driver
-         * was registered before the probe will be restored (=no problem); if it wasn't it means we neer changed the
-         * probe ptr (=also no problem)
-         */
-        install_sd_probe_shim(drv);
-    }
-
-    //We MUST abort here if it fails - if we continue and call what-we-believe-is scsi_register_driver() we can loop!
-    //Returning this error may actually cause KP on Linux v3 because SCSI driver has a null-ptr bug but there's nothing
-    // we can do about that (and this is how the native driver_register() works as well).
-    if (stop_scsi_register_driver_watcher() != 0) {
-        pr_loc_bug("Aborting driver registration due to watcher stop failure");
-        return -EBUSY;
-    }
-
-    int out = scsi_register_driver(drv);
-    //if we didn't get the sd shim we need to continue listening; restoring it is slow but this code path is included
-    // "just-in-case" as of now we've only seen "sd" driver being registered as the first one
-    if (unlikely(!is_sd))
-        start_scsi_register_driver_watcher();
-
-    return out;
-}
-
-// We need an additional flag as depending on which method of sd_probe override (watcher vs. existing driver) we may
-//  not have "org_sd_probe" yet (imagine we registered AND tried to unregister before SCSI sd driver loaded).
+/****************************************** Standard public API of the shim *******************************************/
 static bool shim_registered = false;
-int register_sata_boot_shim(const struct boot_media *boot_dev_config)
+int register_sata_boot_shim(const struct boot_media *config)
 {
-    if (unlikely(boot_dev_config->type != BOOT_MEDIA_SATA)) {
+    shim_reg_in();
+
+    if (unlikely(boot_dev_config->type != BOOT_MEDIA_SATA_DOM)) {
         pr_loc_bug("%s doesn't support device type %d", __FUNCTION__, boot_dev_config->type);
         return -EINVAL;
     }
 
     if (unlikely(shim_registered)) {
-        pr_loc_bug("SATA boot shim is already registered");
+        pr_loc_bug("Native SATA boot shim is already registered");
         return -EEXIST;
     }
 
-    //Regardless of the method we must set the expected size as shim may be called any moment from now on
-    max_dom_size_mib = boot_dev_config->dom_size_mib;
+    //Regardless of the method we must set the expected size (in config) as shim may be called any moment from now on
+    boot_dev_config = config;
     int out = 0;
 
-    struct device_driver *drv = driver_find("sd", &scsi_bus_type);
-    /* This is crucial - the SCSI sd driver may not be loaded (yet) if we were called REALLY early (i.e. during kernel
-     * init). Thus, we need to switch to either replace ->probe callback (while taking care of possibly already probed
-     * disks) or instead watch for the driver registration and replace ->probe during registration.
+    /* We always set-up watching for new devices, as the SCSI notifier is smart enough to accept new subscribers
+     * regardless of the driver state, but if the driver is already loaded we also need to take care of existing devs.
+     * Additionally, subscribing for notifications will, in the future, give us info if a device went away.
      */
-    if (unlikely(IS_ERR(drv))) { //driver_find flat out failed
-        pr_loc_crt("Failed to get sd driver from kernel");
-        out = PTR_ERR(drv);
+    out = subscribe_scsi_disk_events(&scsi_disk_nb);
+    if (unlikely(out != 0)) {
+        pr_loc_err("Failed to register for SCSI disks notifications - error=%d", out);
         goto fail;
-    } else if (drv) { //driver_find found the SCSI sd driver
-        pr_loc_dbg("SCSI sd driver registered - overriding probe & examining existing devices");
-        pr_loc_dbg("Setting detection primitives");
-        install_sd_probe_shim(drv);
+    }
 
-        //Some devices may already be scanned (most likely all if SD was non-modular as it usually is) - we need to scan
-        // them as well and if they match shimming criteria kick them out of the controller and re-probe so that they go
-        // through sd_probe_shim(). Their capacity will be read twice but there's no really way around that (see the
-        // comment in on_existing_device()).
-        probe_existing_devices(drv);
-    } else { //driver_find succeeded but the SCSI sd driver is not registered
-        pr_loc_dbg("SCSI sd driver not registered - hooking driver registration path");
-        out = start_scsi_register_driver_watcher();
-        if (out != 0) {
-            pr_loc_crt("Failed to register SCSI sd driver watcher, error=%d", out);
-            goto fail;
-        }
+    //This will already check if driver is loaded and only iterate if it is
+    out = for_each_scsi_disk(on_existing_scsi_disk);
+    //0 means "call me again" or "success", 1 means "found what I wanted, stop iterating", -ENXIO is "driver not ready"
+    if (unlikely(out < 0 && out != -ENXIO)) {
+        pr_loc_dbg("SCSI driver is already loaded but iteration over existing devices failed - error=%d", out);
+        goto fail_unwatch;
     }
 
     shim_registered = true;
-    pr_loc_dbg("SATA boot shim registered");
+    shim_reg_ok();
     return 0;
 
+    fail_unwatch:
+    unsubscribe_scsi_disk_events(&scsi_disk_nb); //we keep the original code, so this function return code is ignored
     fail:
-    max_dom_size_mib = 0;
+    boot_dev_config = NULL;
     return out;
 }
 
 int unregister_sata_boot_shim(void)
 {
+    shim_ureg_in();
+
     if (unlikely(!shim_registered)) {
-        pr_loc_bug("SATA boot shim is not registered");
+        pr_loc_bug("Native SATA boot shim is not registered");
         return -ENOENT;
     }
 
-    int out = stop_scsi_register_driver_watcher(); //We can call it blindly, it will be a noop if not registered
+    int out = unsubscribe_scsi_disk_events(&scsi_disk_nb);
     if (out != 0)
-        pr_loc_err("Failed to stop SCSI sd driver watcher"); //not returning on this, we should try to restore sd_probe
+        pr_loc_err("Failed to unsubscribe from SCSI events");
 
-    struct device_driver *drv = driver_find("sd", &scsi_bus_type);
-    if (IS_ERR(drv)) {
-        pr_loc_err("Failed to get sd driver from kernel");
-        if (org_sd_probe)
-            pr_loc_bug("sd_probe() is shimmed but we cannot restore it due to driver_find() error - kernel WILL crash");
-        return PTR_ERR(drv); //that's critical: if we cannot get the driver we're leaving in an unknown state
-    }
 
-    //Order of these sets is important as we don't acquire a lock
-    uninstall_sd_probe_shim(drv);
-    max_dom_size_mib = 0;
-    //we are consciously NOT clearing device_mapped. It may be registered and we're not doing anything to unregister it
+    //@todo we are consciously NOT doing reset_shimmed_boot_dev(). It may be registered and we're not doing anything to
+    // unregister it
 
     shim_registered = false;
-    pr_loc_dbg("SATA boot shim unregistered");
+    shim_ureg_ok();
     return 0;
 }
 #else //ifdef NATIVE_SATA_DOM_SUPPORTED
