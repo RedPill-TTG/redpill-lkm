@@ -38,7 +38,7 @@
 #include "../config/runtime_config.h"
 #include "boot_dev/usb_boot_shim.h"
 #include "boot_dev/fake_sata_boot_shim.h"
-#include "boot_dev/sata_boot_shim.h"
+#include "boot_dev/native_sata_boot_shim.h"
 
 #define BOOT_MEDIA_SHIM_NULL (-1)
 
@@ -58,7 +58,7 @@ int register_boot_shim(const struct boot_media *boot_dev_config)
             out = register_usb_boot_shim(boot_dev_config);
             break;
         case BOOT_MEDIA_SATA_DOM:
-            out = register_sata_boot_shim(boot_dev_config);
+            out = register_native_sata_boot_shim(boot_dev_config);
             break;
         case BOOT_MEDIA_SATA_DISK:
             out = register_fake_sata_boot_shim(boot_dev_config);
@@ -87,7 +87,7 @@ int unregister_boot_shim(void)
             out = unregister_usb_boot_shim();
             break;
         case BOOT_MEDIA_SATA_DOM:
-            out = unregister_sata_boot_shim();
+            out = unregister_native_sata_boot_shim();
             break;
         case BOOT_MEDIA_SATA_DISK:
             out = unregister_fake_sata_boot_shim();

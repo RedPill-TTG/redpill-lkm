@@ -60,7 +60,7 @@
  *
  * THE FINAL PICTURE
  * Ok, it is pretty complex indeed. Here's the decision tree this submodule goes through:
- *  register_sata_boot_shim()
+ *  register_native_sata_boot_shim()
  *   => driver_find("sd", ...)
  *      ===FOUND===
  *        + shim sd_probe() to sd_probe_shim()
@@ -90,7 +90,7 @@
  *  - Synology's kernel GPL source -> drivers/scsi/sd.c, search for "gSynoBootSATADOM"
  *  - https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf
  */
-#include "sata_boot_shim.h"
+#include "native_sata_boot_shim.h"
 #include "../../common.h"
 #include "../../config/runtime_config.h" //consts, NATIVE_SATA_DOM_SUPPORTED
 
@@ -200,7 +200,7 @@ static int on_existing_scsi_disk(struct scsi_device *sdp)
 
 /****************************************** Standard public API of the shim *******************************************/
 static bool shim_registered = false;
-int register_sata_boot_shim(const struct boot_media *config)
+int register_native_sata_boot_shim(const struct boot_media *config)
 {
     shim_reg_in();
 
@@ -247,7 +247,7 @@ int register_sata_boot_shim(const struct boot_media *config)
     return out;
 }
 
-int unregister_sata_boot_shim(void)
+int unregister_native_sata_boot_shim(void)
 {
     shim_ureg_in();
 
@@ -269,7 +269,7 @@ int unregister_sata_boot_shim(void)
     return 0;
 }
 #else //ifdef NATIVE_SATA_DOM_SUPPORTED
-int register_sata_boot_shim(const struct boot_media *boot_dev_config)
+int register_native_sata_boot_shim(const struct boot_media *boot_dev_config)
 {
     pr_loc_err("Native SATA boot shim cannot be registered in a kernel built without SATA DoM support");
     return -ENODEV;

@@ -38,15 +38,15 @@ enum boot_media_type {
 };
 
 struct boot_media {
-    enum boot_media_type type; //                                     Default: BOOT_MEDIA_USB <valid>
+    enum boot_media_type type; //                                 Default: BOOT_MEDIA_USB <valid>
 
     //USB only options
-    bool mfg_mode; //emulate mfg mode (valid for USB boot only).      Default: false <valid>
-    device_id vid; //Vendor ID of device containing the loader.       Default: empty <valid, use first>
-    device_id pid; //Product ID of device containing the loader.      Default: empty <valid, use first>
+    bool mfg_mode; //emulate mfg mode (valid for USB boot only).  Default: false <valid>
+    device_id vid; //Vendor ID of device containing the loader.   Default: empty <valid, use first>
+    device_id pid; //Product ID of device containing the loader.  Default: empty <valid, use first>
 
     //SATA only options
-    unsigned long dom_size_mib; //Max size of SATA DOM                Default: 1024 <valid, READ sata_boot_shim.c!!!>
+    unsigned long dom_size_mib; //Max size of SATA DOM            Default: 1024 <valid, READ native_sata_boot_shim.c!!!>
 };
 
 struct vpci_device_stub {
