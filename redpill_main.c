@@ -1,0 +1,51 @@
+//#define STEALTH_MODE
+
+#include "redpill_main.h"
+#include "common.h" //commonly used headers in this module
+#include "config/runtime_config.h"
+#include "internal/stealth.h" //Handling of stealth mode
+#include "config/cmdline_delegate.h" //Parsing of kernel cmdline
+#include "shim/boot_device_shim.h" //Shimming VID/PID of boot device
+#include "shim/bios_shim.h" //Shimming various mfgBIOS functions to make them happy
+
+static int __init init_redpill(void)
+{
+    pr_loc_dbg("================================================================================================");
+    pr_loc_inf("RedPill loading...");
+
+    extract_kernel_cmdline(&current_config);
+    if (!validate_runtime_config(&current_config))
+        goto error_out;
+
+    //All things below MUST be flag-based (either cmdline or device)
+    register_boot_shim(&current_config.boot_media, &current_config.mfg_mode);
+    if (register_bios_shim() != 0)
+        goto error_out;
+
+    pr_loc_inf("RedPill loaded");
+
+    return 0;
+
+    error_out:
+        pr_loc_crt("RedPill cannot be loaded");
+        return -EINVAL;
+}
+
+static void __exit cleanup_redpill(void)
+{
+    pr_loc_inf("RedPill unloading...");
+
+    unregister_bios_shim();
+    unregister_boot_shim();
+
+    free_runtime_config(&current_config);
+
+    pr_loc_inf("RedPill is dead");
+    pr_loc_dbg("================================================================================================");
+}
+
+MODULE_AUTHOR("TTG");
+MODULE_LICENSE("GPL");
+MODULE_VERSION("0.1");
+module_init(init_redpill);
+module_exit(cleanup_redpill);
