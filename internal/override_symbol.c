@@ -130,7 +130,7 @@ struct override_symbol_inst {
 static void __always_inline set_symbol_rw(struct override_symbol_inst *sym)
 {
     set_mem_addr_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
-    sym->mem_protected = true;
+    sym->mem_protected = false;
 }
 
 /**
@@ -138,8 +138,8 @@ static void __always_inline set_symbol_rw(struct override_symbol_inst *sym)
  */
 static void __always_inline set_symbol_ro(struct override_symbol_inst *sym)
 {
-    set_mem_addr_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
-    sym->mem_protected = false;
+    set_mem_addr_ro((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
+    sym->mem_protected = true;
 }
 
 /**
@@ -212,7 +212,7 @@ int __enable_symbol_override(struct override_symbol_inst *sym)
         prepare_trampoline(sym);
 
     if (sym->mem_protected)
-        set_symbol_ro(sym);
+        set_symbol_rw(sym);
 
     WITH_OVS_LOCK(sym,
         pr_loc_dbg("Writing trampoline code to <%p>", sym->org_sym_ptr);
@@ -237,7 +237,7 @@ int __disable_symbol_override(struct override_symbol_inst *sym)
         return 0; //noop but not an error
 
     if (sym->mem_protected)
-        set_symbol_ro(sym);
+        set_symbol_rw(sym);
 
     WITH_OVS_LOCK(sym,
         pr_loc_dbg("Writing original code to <%p>", sym->org_sym_ptr);
@@ -260,7 +260,7 @@ struct override_symbol_inst* __must_check override_symbol(const char *name, cons
     if ((out = __enable_symbol_override(sym)) != 0)
         goto error_out;
 
-    set_symbol_rw(sym); //by design standard override leaves the memory protected
+    set_symbol_ro(sym); //by design standard override leaves the memory protected
 
     pr_loc_dbg("Successfully overrode %s() with trampoline to %pF<%p>", sym->name, sym->new_sym_ptr, sym->new_sym_ptr);
     return sym;
@@ -278,7 +278,7 @@ int restore_symbol(struct override_symbol_inst *sym)
     if ((out = __disable_symbol_override(sym)) != 0)
         goto out_free;
 
-    set_symbol_rw(sym); //by design restore leaves the memory protected
+    set_symbol_ro(sym); //by design restore leaves the memory protected
 
     pr_loc_dbg("Successfully restored original code of %s", sym->name);
 
