@@ -8,6 +8,7 @@
 
 #include <asm/serial.h> //flags for pc_com*
 #include <linux/serial_core.h> //struct uart_port
+#include <linux/version.h> //KERNEL_VERSION()
 
 //These definitions are taken from asm/serial.h for a normal (i.e. non-swapped) UART1/COM1 port on an x86 PC
 #define STD_COM1_IOBASE 0x3f8
