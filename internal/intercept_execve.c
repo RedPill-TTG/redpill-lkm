@@ -20,10 +20,9 @@
  */
 #include "intercept_execve.h"
 #include "../common.h"
-#include <asm/unistd_64.h> //syscalls numbers
 #include <linux/limits.h>
 #include <linux/fs.h> //struct filename
-#include "override_symbol.h" //override_syscall()
+#include "override/override_syscall.h" //SYSCALL_SHIM_DEFINE3, override_symbol
 #include "call_protected.h" //do_execve(), getname(), putname()
 
 #ifdef RPDBG_EXECVE
@@ -59,17 +58,13 @@ int add_blocked_execve_filename(const char *filename)
     return 0;
 }
 
-//These definitions must match SYSCALL_DEFINE3(execve) as in fs/exec.c
-asmlinkage long (*org_sys_execve)(const char __user *filename,
-                                  const char __user *const __user *argv,
-                                  const char __user *const __user *envp);
-
-static asmlinkage long shim_sys_execve(const char __user *filename,
-                                       const char __user *const __user *argv,
-                                       const char __user *const __user *envp)
+SYSCALL_SHIM_DEFINE3(execve,
+                     const char __user *, filename,
+                     const char __user *const __user *, argv,
+                     const char __user *const __user *, envp)
 {
-
     struct filename *path = _getname(filename);
+
     //this is essentially what do_execve() (or SYSCALL_DEFINE3 on older kernels) will do if the getname ptr is invalid
     if (IS_ERR(path))
         return PTR_ERR(path);
@@ -102,13 +97,12 @@ static asmlinkage long shim_sys_execve(const char __user *filename,
 #endif
 }
 
+static override_symbol_inst *sys_execve_ovs = NULL;
 int register_execve_interceptor()
 {
     pr_loc_dbg("Registering execve() interceptor");
 
-    int out = override_syscall(__NR_execve, shim_sys_execve, (void *)&org_sys_execve);
-    if (out != 0)
-        return out;
+    override_symbol_or_exit_int(sys_execve_ovs, "SyS_execve", SyS_execve_shim);
 
     pr_loc_inf("execve() interceptor registered");
     return 0;
@@ -118,7 +112,12 @@ int unregister_execve_interceptor()
 {
     pr_loc_dbg("Unregistering execve() interceptor");
 
-    int out = restore_syscall(__NR_execve);
+    if (!sys_execve_ovs) {
+        pr_loc_bug("Called %s() while execve() interceptor is not registered (yet?)", __FUNCTION__);
+        return -ENXIO;
+    }
+
+    int out = restore_symbol(sys_execve_ovs);
     if (out != 0)
         return out;
 
