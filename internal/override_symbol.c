@@ -26,10 +26,6 @@
  * References:
  *  - https://www.cs.uaf.edu/2016/fall/cs301/lecture/09_28_machinecode.html
  *  - http://www.watson.org/%7Erobert/2007woot/2007usenixwoot-exploitingconcurrency.pdf
- *
- *  Current limitations:
- *  In rare circumstances it may panic the kernel, see: https://stackoverflow.com/a/68150310 - it can be easily fixed
- *  thou.
  */
 
 #include "override_symbol.h"
@@ -60,6 +56,7 @@ static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
  * This in essence needs to first disable CR0 protection register (which normally blocks changing pages to r/w), then
  * switch the page to r/w. For details see CR0 documentation in Section 2.5 of Intel Developer's Manual:
  * https://software.intel.com/content/dam/develop/public/us/en/documents/325384-sdm-vol-3abcd.pdf
+ * All this code needs to run with preempting disabled to prevent ctx switching and landing in on a different core.
  *
  * FYI: This will stop working in Linux 5.3:
  *      https://unix.stackexchange.com/questions/575122/does-linux-kernel-since-version-5-0-have-a-cr0-protection
@@ -70,17 +67,13 @@ static int disable_symbol_wp(const unsigned long vaddr)
 {
     pr_loc_dbg("Disabling memory protection for page at %p (<<%p)", (void *)vaddr, (void *)PAGE_ALIGN(vaddr));
 
-    unsigned long cr0;
-    int out;
-    preempt_disable(); //prevent context switching as we're modifying CPU-dependent state
-    cr0 = read_cr0() & (~X86_CR0_WP);
-    write_cr0(cr0);
+    preempt_disable();
+    write_cr0(read_cr0() & (~X86_CR0_WP));
 
-    out = _set_memory_rw(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
+    int out = _set_memory_rw(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
     if (out != 0) {
         pr_loc_err("set_memory_rw() failed: %d", out);
-        cr0 |= X86_CR0_WP;
-        write_cr0(cr0);
+        write_cr0(read_cr0() | X86_CR0_WP);
         preempt_enable();
     }
 
@@ -94,19 +87,12 @@ static int enable_symbol_wp(const unsigned long vaddr)
 {
     pr_loc_dbg("Enabling memory protection for page at %p (<<%p)", (void *)vaddr, (void *)PAGE_ALIGN(vaddr));
 
-    int out = 0;
-    out = _set_memory_ro(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
-    if (out != 0) {
-        pr_loc_err("set_memory_ro() failed: %d", out);
-
-        return out;
-    }
-
-    preempt_disable(); //prevent context switching as we're modifying CPU-dependent state
-    unsigned long cr0;
-    cr0 = read_cr0() | X86_CR0_WP;
-    write_cr0(cr0);
+    int out = _set_memory_ro(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
+    write_cr0(read_cr0() | X86_CR0_WP);
     preempt_enable();
+
+    if (out != 0)
+        pr_loc_err("set_memory_ro() failed: %d", out);
 
     return out;
 }
