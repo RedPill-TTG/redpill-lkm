@@ -1,6 +1,7 @@
 #ifndef REDPILLLKM_COMMON_H
 #define REDPILLLKM_COMMON_H
 
+#include "internal/stealth.h"
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
@@ -11,13 +12,16 @@
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-#ifdef STEALTH_MODE
+#if STEALTH_MODE >= STEALTH_MODE_NORMAL
+#define pr_loc_crt(fmt, ...)
 #define pr_loc_err(fmt, ...)
 #define pr_loc_inf(fmt, ...)
 #define pr_loc_wrn(fmt, ...)
 #define pr_loc_dbg(fmt, ...)
-#else
-//TODO currently debug is printed with info
+#define pr_loc_bug(fmt, ...)
+
+#else //STEALTH_MODE
+
 #define pr_loc_crt(fmt, ...) pr_crit( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define pr_loc_err(fmt, ...) pr_err ( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define pr_loc_inf(fmt, ...) pr_info( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)

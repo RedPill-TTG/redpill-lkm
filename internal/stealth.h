@@ -1,16 +1,18 @@
+/*
+ * This header file should be included as the first one before anything else so other header files can use STEALTH_MODE
+ */
+
 #ifndef REDPILLLKM_STEALTH_H
 #define REDPILLLKM_STEALTH_H
 
-#ifdef STEALTH_MODE
+#define STEALTH_MODE_OFF    0   //Nothing is hidden, useful for full-on debugging
+#define STEALTH_MODE_BASIC  1   //Hides basic things like cmdline (which is more to prevent DSM code from complaining about unknown options etc.)
+#define STEALTH_MODE_NORMAL 2   //Hides everything except making the module not unloadable
+#define STEALTH_MODE_FULL   3   //Same as STEALTH_MODE_NORMAL + removes the module from list of loaded modules
 
-/**
- * Prevents the module from being detected by overriding some things
- *
- * @see https://github.com/xcellerator/linux_kernel_hacking/blob/master/3_RootkitTechniques/3.0_hiding_lkm/rootkit.c
- */
-void goStealth(void);
-
-#endif //STEALTH_MODE
-
+//Define just after levels so other headers can use it if needed to e.g. replace some macros
+#ifndef STEALTH_MODE
+#define STEALTH_MODE STEALTH_MODE_BASIC
+#endif
 
 #endif //REDPILLLKM_STEALTH_H

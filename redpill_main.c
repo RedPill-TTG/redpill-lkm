@@ -1,9 +1,6 @@
-//#define STEALTH_MODE
-
 #include "redpill_main.h"
 #include "common.h" //commonly used headers in this module
 #include "config/runtime_config.h"
-#include "internal/stealth.h" //Handling of stealth mode
 #include "internal/intercept_execve.h" //Handling of stealth mode
 #include "config/cmdline_delegate.h" //Parsing of kernel cmdline
 #include "shim/boot_device_shim.h" //Shimming VID/PID of boot device

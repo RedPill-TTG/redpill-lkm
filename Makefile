@@ -17,6 +17,10 @@ obj-m += redpill.o
 redpill-objs := $(OBJS)
 ccflags-y += -std=gnu99 -fgnu89-inline -Wno-declaration-after-statement -g -fno-inline
 
+ifneq ($(STEALTH_MODE),)
+ccflags-y += -DSTEALTH_MODE=$(STEALTH_MODE)
+endif
+
 all:
 	$(MAKE) -C $(LINUX_SRC) M=$(PWD) modules
 clean:

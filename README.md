@@ -28,6 +28,8 @@ Read about the quirk in a separate repo: https://github.com/RedPill-TTG/dsm-rese
 
 While calling `make` you can also add these additional modifiers (e.g. `make FOO BAR`):
  - `DBG_EXECVE`: enabled debugging of every `execve()` call with arguments
+ - `STEALTH_MODE=#`: controls the level of "stealthiness", see `STEALTH_MODE_*` in `internal/stealth.h`; it's 
+   `STEALTH_MODE_BASIC` by default
 
 ## Documentation split
 The documentation regarding actual quirks/mechanisms/discoveries regarding DSM is present in a dedicated research repo 
