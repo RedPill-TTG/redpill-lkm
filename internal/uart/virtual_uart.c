@@ -58,12 +58,13 @@
  */
 
 //Here are some flags which can be used to modify the behavior of VirtualUART. They're checked by other header files.
+//Keep in mind you may need to set the debug in vuart_virtual_irq separatedly (or in common.h)
 //#define VUART_DEBUG_LOG
 //#define VUART_USE_TIMER_FALLBACK
-//#define VUART_THREAD_FMT "some-name/irq%d-ttyS%d"
 
 #include "virtual_uart.h"
 #include "vuart_internal.h"
+#include "../../common.h" //can set VUART_DEBUG_LOG and others
 #include "../../debug/debug_vuart.h" //it will provide normal or nooped versions of macros; CHECKS VUART_DEBUG_LOG
 #include "../../common.h"
 #include "../../config/uart_defs.h" //COM defs & struct uart_port
@@ -128,7 +129,7 @@ static struct flush_callback *flush_cbs[SERIAL8250_LAST_ISA_LINE] = { NULL };
 #define capture_uart_port(vdev, port) if (unlikely(!(vdev)->up)) (vdev)->up = port;
 
 //Some functions should warn use out of courtesy that we're running in a stupid environment
-#ifdef UART_BUG_SWAPPED
+#if defined(UART_BUG_SWAPPED) && defined(DBG_DISABLE_UART_SWAP_FIX)
 #define warn_bug_swapped(line) \
     if ((line) < 2) { \
         pr_loc_inf( \
