@@ -1,4 +1,5 @@
 #include "runtime_config.h"
+#include "platforms.h"
 #include "../common.h"
 #include "cmdline_delegate.h"
 
@@ -13,19 +14,9 @@ struct runtime_config current_config = {
     .port_thaw = true,
     .netif_num = 0,
     .macs = { '\0' },
-    .cmdline_blacklist = { '\0' }
+    .cmdline_blacklist = { '\0' },
+    .hw_config = NULL,
 };
-
-static inline bool validate_hw(const syno_hw *hw) {
-    //TODO: placeholder - it should validate the model against a list
-
-    if (*hw[0] == '\0') {
-        pr_loc_err("Empty model, please set \"%s\" parameter", CMDLINE_KT_HW);
-        return false;
-    }
-
-    return true;
-}
 
 static inline bool validate_sn(const serial_no *sn) {
     if (*sn[0] == '\0') {
@@ -90,16 +81,57 @@ static inline bool validate_nets(const unsigned short if_num, mac_address *macs[
     return valid;
 }
 
-bool validate_runtime_config(const struct runtime_config *config)
+static int populate_hw_config(struct runtime_config *config)
 {
+    //We cannot run with empty model or model which didn't match
+    if (config->hw[0] == '\0') {
+        pr_loc_crt("Empty model, please set \"%s\" parameter", CMDLINE_KT_HW);
+        return -ENOENT;
+    }
+
+    for (int i = 0; i < ARRAY_SIZE(supported_platforms); i++) {
+        if (strcmp(supported_platforms[i].name, (char *)config->hw) != 0)
+            continue;
+
+        pr_loc_dbg("Found platform definition for \"%s\"", config->hw);
+        config->hw_config = &supported_platforms[i];
+        return 0;
+    }
+
+    pr_loc_crt("The model set using \"%s%s\" is not valid", CMDLINE_KT_HW, config->hw);
+    return -EINVAL;
+}
+
+static bool validate_runtime_config(const struct runtime_config *config)
+{
+    pr_loc_dbg("Validating runtime config...");
     bool valid = true;
 
-    valid &= validate_hw(&config->hw);
     valid &= validate_sn(&config->sn);
     valid &= validate_vid_pid(&config->boot_media);
     valid &= validate_nets(config->netif_num, config->macs);
 
-    return valid;
+    if (valid) {
+        pr_loc_dbg("Config validation resulted in %s", valid ? "OK" : "ERR");
+        return 0;
+    } else {
+        pr_loc_err("Config validation FAILED");
+        return -EINVAL;
+    }
+}
+
+int populate_runtime_config(struct runtime_config *config)
+{
+    int out = 0;
+
+    if ((out = populate_hw_config(config)) != 0 || (out = validate_runtime_config(config)) != 0) {
+        pr_loc_err("Failed to populate runtime config!");
+        return out;
+    }
+
+    pr_loc_inf("Runtime config populated");
+
+    return out;
 }
 
 void free_runtime_config(struct runtime_config *config)
@@ -117,4 +149,6 @@ void free_runtime_config(struct runtime_config *config)
             kfree(config->cmdline_blacklist[i]);
         }
     }
+
+    pr_loc_inf("Runtime config freed");
 }

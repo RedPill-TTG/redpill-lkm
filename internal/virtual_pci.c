@@ -28,7 +28,7 @@
  *  - "devfn" in Linux terminology does NOT mean "device function" but rather "device# and function#". It is described
  *    in drivers/pci/search.c as "encodes number of PCI slot in which the desired PCI device resides and the logical
  *    device number within that slot in case of multi-function devices".
- *    You can use macros DEVFN_COMBO_TO_DEV_NO() and DEVFN_COMBO_TO_DEV_FN() to get dev# and fn# from that field
+ *    You can use macros PCI_SLOT() and PCI_FUNC() to get dev# and fn# from that field.
  *  - Linux provides class & subclass constants (PCI_CLASS_* in include/linux/pci_ids.h). However they're defined as
  *    either:
  *     - 8 bit class
@@ -149,7 +149,7 @@
  * x86 BUS SCANNING BUG (>=v4.1)
  * -----------------------------
  * Since v4.1 adding a new bus under a different domain will cause devices on the bus to not be fully populated. See the
- * comment in "vpci_add_device()" here for details & a simple fix.
+ * comment in "vpci_add_single_device()" here for details & a simple fix.
  *
  * KNOWN BUGS
  * ----------
@@ -179,6 +179,17 @@
 
 #define PCIBUS_VIRTUAL_DOMAIN 0x0001 //normal PC buses are (always?) on domain 0, this is just a next one
 #define PCI_DEVICE_NOT_FOUND_VID_DID 0xFFFFFFFF //A special case to detect non-existing devices (per PCI spec)
+
+/* As per PCI spec
+ *    If a single function device is detected (i.e., bit 7 in the Header
+ *    Type register of function 0 is 0), no more functions for that
+ *    Device Number will be checked. If a multi-function device is
+ *    detected (i.e., bit 7 in the Header Type register of function 0
+ *    is 1), then all remaining Function Numbers will be checked.
+ * This helper converts single-function header type to multifunction header type
+ */
+#define PCI_HEADER_TO_MULTI(x) ((1 << 7) | (x))
+#define IS_PCI_HEADER_MULTI(x) (!!((x) & 0x80))
 
 //Model of a default config for a device
 const struct pci_dev_descriptor pci_dev_conf_default_normal_dev = {
@@ -275,8 +286,8 @@ static int pci_read_cfg(struct pci_bus *bus, unsigned int devfn, int where, int 
 {
     //devfn is a combination of device number on bus and function number (Bus/Device/Function addressing)
     //Each device which exists MUST implement function 0. So every 8th value of devfn we have a new device.
-    unsigned char vdev_no = DEVFN_COMBO_TO_DEV_NO(devfn);
-    unsigned char vdev_fn = DEVFN_COMBO_TO_DEV_FN(devfn);
+    unsigned char vdev_no = PCI_SLOT(devfn);
+    unsigned char vdev_fn = PCI_FUNC(devfn);
 
     void *pci_descriptor = NULL;
 
@@ -291,16 +302,21 @@ static int pci_read_cfg(struct pci_bus *bus, unsigned int devfn, int where, int 
         //We cannot use devices[i]->bus->number during scan as the bus may just being created and no ->bus is available
         if(*devices[i]->bus_no == bus->number && devices[i]->dev_no == vdev_no && devices[i]->fn_no == vdev_fn) {
             //Very noisy!
-            //pr_loc_dbg("Found matching vDEV @ bus=%02x dev=%02x fn=%02x => vidx=%d", bus->number, vdev_no, vdev_fn, i);
+            //pr_loc_dbg("Found matching vDEV @ bus=%02x dev=%02x fn=%02x => vidx=%d mf=%d", bus->number, vdev_no,
+            //           vdev_fn, i,
+            //           IS_PCI_HEADER_MULTI(((struct pci_dev_descriptor *) devices[i]->descriptor)->header_type) ? 1:0);
             pci_descriptor = devices[i]->descriptor;
             break;
         }
     };
 
-    if (!pci_descriptor) {
+    if (!pci_descriptor) { //This is not a hack - this is per PCI spec to return special "not found pid/vid"
         if (where == PCI_VENDOR_ID || where == PCI_DEVICE_ID)
             *val = PCI_DEVICE_NOT_FOUND_VID_DID;
 
+        //Very noisy!
+        //pr_loc_dbg("Read NAK wh=0x%d sz=%d B / %d for vDEV @ bus=%02x dev=%02x fn=%02x", where, size, size * 8, bus->number,
+        //           vdev_no, vdev_fn);
         return PCIBIOS_DEVICE_NOT_FOUND;
     }
 
@@ -373,7 +389,7 @@ static inline int validate_bdf(unsigned char bus_no, unsigned char dev_no, unsig
     for_each_dev_idx() {
         if (
                 likely(*devices[i]->bus_no == bus_no) &&
-                unlikely(devices[i]->dev_no == dev_no && devices[i]->fn_no)
+                unlikely(devices[i]->dev_no == dev_no && devices[i]->fn_no == fn_no)
                 ) {
             pr_loc_err("Device bus=%02x dev=%02x fn=%02x already exists in vidx=%d", bus_no, dev_no, fn_no, i);
             return -EEXIST;
@@ -418,6 +434,7 @@ vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
         device->bus_no = &bus->number;
         devices[free_dev_idx++] = device;
 
+        //We cannot use "pci_scan_single_device" here in case there are mf devices
         pci_rescan_bus(bus); //this cannot fail - it simply return max device num
 
         pr_loc_err("Added device with existing bus @ bus=%02x dev=%02x fn=%02x", *device->bus_no, device->dev_no,
@@ -472,6 +489,48 @@ vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
     return device;
 }
 
+const struct virtual_device *
+vpci_add_single_device(unsigned char bus_no, unsigned char dev_no, struct pci_dev_descriptor *descriptor)
+{
+    if (unlikely(IS_PCI_HEADER_MULTI(descriptor->header_type))) {
+        pr_loc_bug("Attempted to use %s() to add multifunction device."
+                   "Did you mean to use vpci_add_multifunction_device()?", __FUNCTION__);
+        return ERR_PTR(-EINVAL);
+    }
+
+    return vpci_add_device(bus_no, dev_no, 0x00, descriptor);
+}
+
+const struct virtual_device *
+vpci_add_multifunction_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
+                              struct pci_dev_descriptor *descriptor)
+{
+    descriptor->header_type = PCI_HEADER_TO_MULTI(descriptor->header_type);
+
+    return vpci_add_device(bus_no, dev_no, fn_no, descriptor);
+}
+
+const struct virtual_device *
+vpci_add_single_bridge(unsigned char bus_no, unsigned char dev_no, struct pci_pci_bridge_descriptor *descriptor)
+{
+    if (unlikely(IS_PCI_HEADER_MULTI(descriptor->header_type))) {
+        pr_loc_bug("Attempted to use %s() to add multifunction device."
+                   "Did you mean to use vpci_add_multifunction_device()?", __FUNCTION__);
+        return ERR_PTR(-EINVAL);
+    }
+
+    return vpci_add_device(bus_no, dev_no, 0x00, descriptor);
+}
+
+const struct virtual_device *
+vpci_add_multifunction_bridge(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
+                              struct pci_pci_bridge_descriptor *descriptor)
+{
+    descriptor->header_type = PCI_HEADER_TO_MULTI(descriptor->header_type);
+
+    return vpci_add_device(bus_no, dev_no, fn_no, descriptor);
+}
+
 int vpci_remove_all_devices_and_buses(void)
 {
     //The order here is crucial - kernel WILL NOT remove references to devices on bus removal (and cause a KP)
@@ -481,8 +540,8 @@ int vpci_remove_all_devices_and_buses(void)
     struct pci_dev *pci_dev, *pci_dev_n;
     for_each_bus_idx() {
         list_for_each_entry_safe(pci_dev, pci_dev_n, &buses[i]->devices, bus_list) {
-            pr_loc_dbg("Detaching vDEV dev=%02x fn=%02x from bus=%02x [add=%d]", DEVFN_COMBO_TO_DEV_NO(pci_dev->devfn),
-                       DEVFN_COMBO_TO_DEV_FN(pci_dev->devfn), buses[i]->number, pci_dev->is_added);
+            pr_loc_dbg("Detaching vDEV dev=%02x fn=%02x from bus=%02x [add=%d]", PCI_SLOT(pci_dev->devfn),
+                       PCI_FUNC(pci_dev->devfn), buses[i]->number, pci_dev->is_added);
             pci_stop_and_remove_bus_device(pci_dev);
         }
     }

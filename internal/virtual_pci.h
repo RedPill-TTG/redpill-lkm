@@ -15,9 +15,6 @@
 #define U24_CLASS_TO_U8_PROGIF(x) ((x) & 0xFF)
 #define U16_CLASS_TO_U8_CLASS(x) (((x) >> 8) & 0xFF)
 #define U16_CLASS_TO_U8_SUBCLASS(x) ((x) & 0xFF)
-#define DEVFN_COMBO_TO_DEV_NO(x) ((unsigned char)((x) / 8)) //Gets device number from "devfn" combo field
-#define DEVFN_COMBO_TO_DEV_FN(x) ((unsigned char)((x) & 7)) //Gets device function from "devfn" combo field (same as %8)
-
 
 //Some helpful constants on top of what's in linux/pci_ids.h & linux/pci_regs.h
 #define PCI_DSC_NO_INT_LINE 0xFF
@@ -91,6 +88,11 @@ struct pci_pci_bridge_descriptor {
     u8 subclass;           // ]-> prof_if, subclass, and class are normally represented as 24-bit class code
     u8 class;              // ]
 
+    u8 cache_line_size;
+    u8 latency_timer;
+    u8 header_type;        //see PCI_HEADER_TYPE_*
+    u8 bist;               //see PCI_BIST_*
+
     u32 bar0;
     u32 bar1;
 
@@ -126,7 +128,7 @@ struct pci_pci_bridge_descriptor {
     u16 bridge_ctrl;
 } __packed;
 
-//This is implemented currently
+//This is currently not implemented
 struct pci_dev_capability {
     u8 cap_id; //see PCI_CAP_ID_*, set to 0x00 to denote null-capability
     u8 cap_next; //offset where next capability exists, set to 0x00 to denote null-capability
@@ -134,11 +136,36 @@ struct pci_dev_capability {
 } __packed;
 
 /**
- * Adds new device (along with the bus if needed)
+ * Adds a single new device (along with the bus if needed)
  *
  * If you don't want to create the descriptor from scratch you can use "const struct pci_dev_conf_default_normal_dev"
  * while setting some missing params (see .c file header for details).
  * Note: you CAN reuse the same descriptor under multiple BDFs (bus_no/dev_no/fn_no)
+ *
+ * @param bus_no (0x00 - 0xFF)
+ * @param dev_no (0x00 - 0x20)
+ * @param descriptor Pointer to pci_dev_descriptor or pci_pci_bridge_descriptor
+ * @return virtual_device ptr or error pointer (ERR_PTR(-E))
+ */
+const struct virtual_device *
+vpci_add_single_device(unsigned char bus_no, unsigned char dev_no, struct pci_dev_descriptor *descriptor);
+
+/**
+ * See vpci_add_single_device() for details
+ */
+const struct virtual_device *
+vpci_add_single_bridge(unsigned char bus_no, unsigned char dev_no, struct pci_pci_bridge_descriptor *descriptor);
+
+
+/*
+ * Adds a new multifunction device (along with the bus if needed)
+ *
+ * Warning about multifunctional devices
+ *  - this function has a slight limitation due to how Linux scans devices. You HAVE TO add fn_no=0 entry as the LAST
+ *    one when calling it multiple times. Kernel scans devices only once for changes and if it finds fn=0 and it's the
+ *    only one (i.e. you added fn=0 first) adding more functions will not populate them (as kernel will never re-scan
+ *    the device).
+ *  - As per PCI spec Linux doesn't allow devices to have fn>0 if they don't have corresponding fn=0 entry
  *
  * @param bus_no (0x00 - 0xFF)
  * @param dev_no (0x00 - 0x20)
@@ -147,7 +174,15 @@ struct pci_dev_capability {
  * @return virtual_device ptr or error pointer (ERR_PTR(-E))
  */
 const struct virtual_device *
-vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no, void *descriptor);
+vpci_add_multifunction_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
+                              struct pci_dev_descriptor *descriptor);
+
+/**
+ * See vpci_add_multifunction_device() for details
+ */
+const struct virtual_device *
+vpci_add_multifunction_bridge(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
+                              struct pci_pci_bridge_descriptor *descriptor);
 
 /**
  * Removes all previously added devices and buses

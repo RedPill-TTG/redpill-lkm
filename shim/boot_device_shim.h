@@ -4,7 +4,7 @@
 #include <linux/types.h> //bool type
 #include "../config/runtime_config.h" //boot_media type
 
-void register_boot_shim(const struct boot_media *real_boot_device, const bool *run_mfg_mode);
-void unregister_boot_shim(void);
+int register_boot_shim(const struct boot_media *real_boot_device, const bool *run_mfg_mode);
+int unregister_boot_shim(void);
 
 #endif //REDPILLLKM_BOOT_DEVICE_SHIM_H

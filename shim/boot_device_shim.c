@@ -131,17 +131,19 @@ static void register_device_notifier(void)
     pr_loc_dbg("Registered USB device notifier");
 }
 
-static void unregister_device_notifier(void)
+static int unregister_device_notifier(void)
 {
     if (unlikely(!device_notify_registered)) {
         pr_loc_bug("%s called while notifier not registered", __FUNCTION__);
-        return;
+        return -ENOENT;
     }
 
     //This has to use dynamic calling to avoid being dependent on usbcore (since we need to load before usbcore)
     _usb_unregister_notify(&device_notifier_block); //has no return value
     device_notify_registered = false;
     pr_loc_dbg("Unregistered USB device notifier");
+
+    return 0;
 }
 
 /**
@@ -177,16 +179,19 @@ static struct notifier_block usbcore_notifier_block = {
 /**
  * Watches for "usbcore" module load
  */
-static void register_usbcore_notifier(void)
+static int register_usbcore_notifier(void)
 {
+    int error = 0;
+
     if (unlikely(module_notify_registered)) {
         pr_loc_bug("%s called while notifier already registered", __FUNCTION__);
-        return;
+        return 0; //technically it's not an error
     }
 
-    if(unlikely(register_module_notifier(&usbcore_notifier_block) != 0)) {
+    error = register_module_notifier(&usbcore_notifier_block);
+    if(unlikely(error != 0)) {
         pr_loc_err("Failed to register module notifier"); //Currently it's impossible to happen... currently
-        return;
+        return error;
     }
 
     module_notify_registered = true;
@@ -200,38 +205,52 @@ static void register_usbcore_notifier(void)
                    "-> registering device notifier right away");
         register_device_notifier();
     }
+
+    return error;
 }
 
-static void unregister_usbcore_notifier(void)
+static int unregister_usbcore_notifier(void)
 {
     if (unlikely(!module_notify_registered)) { //unregister should be called first if so
         pr_loc_bug("%s called while notifier not registered", __FUNCTION__);
-        return;
+        return -ENOENT;
     }
 
-    if(unlikely(unregister_module_notifier(&usbcore_notifier_block) != 0)) {
+    int out = unregister_module_notifier(&usbcore_notifier_block);
+    if(unlikely(out != 0)) {
         pr_loc_err("Failed to unregister module notifier"); //Currently it's impossible to happen... currently
-        return;
+        return out;
     }
 
     module_notify_registered = false;
     pr_loc_dbg("Unregistered usbcore module notifier");
+
+    return 0;
 }
 
-void register_boot_shim(const struct boot_media *real_boot_device, const bool *run_mfg_mode)
+int register_boot_shim(const struct boot_media *real_boot_device, const bool *run_mfg_mode)
 {
     boot_media = real_boot_device;
     mfg_mode = run_mfg_mode;
 
-    register_usbcore_notifier(); //it will register device notifier when module loads
+    int out = register_usbcore_notifier(); //it will register device notifier when module loads
+    if (out != 0)
+        return out;
 
     pr_loc_inf("Boot shim registered");
+    return out;
 }
 
-void unregister_boot_shim(void)
+int unregister_boot_shim(void)
 {
-    unregister_usbcore_notifier();
-    unregister_device_notifier();
+    int out = 0;
+
+    if (
+            (out = unregister_usbcore_notifier()) != 0
+         || (out = unregister_device_notifier()) != 0
+    )
+        return out;
 
     pr_loc_inf("Boot shim unregistered");
+    return out;
 }
