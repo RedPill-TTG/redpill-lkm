@@ -60,6 +60,9 @@ struct Scsi_Host;
 CP_DECLARE_SHIM(int, scsi_scan_host_selected,
                 CP_LIST(struct Scsi_Host *shost, unsigned int channel, unsigned int id, u64 lun, int rescan));
 
+struct ida;
+CP_DECLARE_SHIM(int, ida_pre_get, CP_LIST(struct ida *ida, gfp_t gfp_mask));
+
 struct notifier_block;
 CP_DECLARE_SHIM(void, usb_register_notify, CP_LIST(struct notifier_block *nb));
 CP_DECLARE_SHIM(void, usb_unregister_notify, CP_LIST(struct notifier_block *nb));

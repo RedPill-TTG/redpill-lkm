@@ -32,49 +32,84 @@ static inline bool validate_sn(const serial_no *sn) {
     return true;
 }
 
-static inline bool validate_boot_dev(const struct boot_media *boot)
+static __always_inline bool validate_boot_dev_usb(const struct boot_media *boot)
 {
-    if (likely(boot->type == BOOT_MEDIA_USB)) {
-        if (boot->vid == VID_PID_EMPTY && boot->pid == VID_PID_EMPTY) {
-            pr_loc_wrn("Empty/no \"%s\" and \"%s\" specified - first USB storage device will be used", CMDLINE_CT_VID,
-                       CMDLINE_CT_PID);
-            return true; //this isn't necessarily an error (e.g. running under a VM with only a single USB port)
-        }
-
-        if (boot->vid == VID_PID_EMPTY) { //PID=0 is valid, but the VID is not
-            pr_loc_err("Empty/no \"%s\" specified", CMDLINE_CT_VID);
-            return false;
-        }
-
-        pr_loc_dbg("Configured boot device type to USB");
-        return true;
-        //not checking for >VID_PID_MAX as vid type is already ushort
+    if (boot->vid == VID_PID_EMPTY && boot->pid == VID_PID_EMPTY) {
+        pr_loc_wrn("Empty/no \"%s\" and \"%s\" specified - first USB storage device will be used", CMDLINE_CT_VID,
+                   CMDLINE_CT_PID);
+        return true; //this isn't necessarily an error (e.g. running under a VM with only a single USB port)
     }
 
-    if (boot->type == BOOT_MEDIA_SATA) {
-#ifndef NATIVE_SATA_DOM_SUPPORTED
-        pr_loc_err("Kernel you are running was built without SATA DoM support, you cannot use %s", CMDLINE_KT_SATADOM);
+    if (boot->vid == VID_PID_EMPTY) { //PID=0 is valid, but the VID is not
+        pr_loc_err("Empty/no \"%s\" specified", CMDLINE_CT_VID);
         return false;
+    }
+
+    pr_loc_dbg("Configured boot device type to USB");
+    return true;
+    //not checking for >VID_PID_MAX as vid type is already ushort
+}
+
+static __always_inline bool validate_boot_dev_sata_dom(const struct boot_media *boot)
+{
+#ifndef NATIVE_SATA_DOM_SUPPORTED
+    pr_loc_err("Kernel you are running a kernel was built without SATA DoM support, you cannot use %s%c. "
+               "You can try booting with %s%c to enable experimental fake-SATA DoM.",
+               CMDLINE_KT_SATADOM, CMDLINE_KT_SATADOM_NATIVE,
+               CMDLINE_KT_SATADOM, CMDLINE_KT_SATADOM_FAKE);
+    return false;
 #endif
 
-        if (boot->vid != VID_PID_EMPTY || boot->pid != VID_PID_EMPTY)
-            pr_loc_wrn("Using SATA-DoM boot - %s and %s parameter values will be ignored",
-                       CMDLINE_CT_VID, CMDLINE_CT_PID);
+    if (boot->vid != VID_PID_EMPTY || boot->pid != VID_PID_EMPTY)
+        pr_loc_wrn("Using native SATA-DoM boot - %s and %s parameter values will be ignored",
+                   CMDLINE_CT_VID, CMDLINE_CT_PID);
 
-        //this config is impossible as there's no equivalent for force-reinstall boot on SATA, so it's better to detect
-        //that rather than causing WTFs for someone who falsely assuming that it's possible
-        if (boot->mfg_mode) {
-            pr_loc_err("You cannot combine %s=1 with %s - the OS supports force-reinstall on USB only",
-                       CMDLINE_KT_SATADOM, CMDLINE_CT_MFG);
-            return false;
-        }
-
-        pr_loc_dbg("Configured boot device type to SATA");
-        return true;
+    //this config is impossible as there's no equivalent for force-reinstall boot on SATA, so it's better to detect
+    //that rather than causing WTFs for someone who falsely assuming that it's possible
+    //However, it does work with fake-SATA boot (as it emulates USB disk anyway)
+    if (boot->mfg_mode) {
+        pr_loc_err("You cannot combine %s%c with %s - the OS supports force-reinstall on USB and fake SATA disk only",
+                   CMDLINE_KT_SATADOM, CMDLINE_KT_SATADOM_NATIVE, CMDLINE_CT_MFG);
+        return false;
     }
 
-    pr_loc_bug("Got unknown boot type - did you forget to update %s?", __FUNCTION__);
-    return false;
+    pr_loc_dbg("Configured boot device type to fake-SATA DOM");
+    return true;
+}
+
+static __always_inline bool validate_boot_dev_sata_disk(const struct boot_media *boot)
+{
+#ifdef NATIVE_SATA_DOM_SUPPORTED
+    pr_loc_wrn("The kernel you are running supports native SATA DoM (%s%c). You're currently using an experimental "
+               "fake-SATA DoM (%s%c) - consider switching to native SATA DoM (%s%c) for more stable operation.",
+               CMDLINE_KT_SATADOM, CMDLINE_KT_SATADOM_NATIVE,
+               CMDLINE_KT_SATADOM, CMDLINE_KT_SATADOM_FAKE,
+               CMDLINE_KT_SATADOM, CMDLINE_KT_SATADOM_NATIVE);
+#endif
+
+    if (boot->vid != VID_PID_EMPTY || boot->pid != VID_PID_EMPTY)
+        pr_loc_wrn("Using fake SATA disk boot - %s and %s parameter values will be ignored",
+                   CMDLINE_CT_VID, CMDLINE_CT_PID);
+
+    pr_loc_dbg("Configured boot device type to fake-SATA DOM");
+    return true;
+}
+
+static inline bool validate_boot_dev(const struct boot_media *boot)
+{
+    switch (boot->type) {
+        case BOOT_MEDIA_USB:
+            return validate_boot_dev_usb(boot);
+        case BOOT_MEDIA_SATA_DOM:
+            return validate_boot_dev_sata_dom(boot);
+        case BOOT_MEDIA_SATA_DISK:
+            return validate_boot_dev_sata_disk(boot);
+        default:
+            pr_loc_bug("Got unknown boot type - did you forget to update %s after changing cmdline parsing?",
+                       __FUNCTION__);
+            return false;
+
+    }
 }
 
 static inline bool validate_nets(const unsigned short if_num, mac_address * const macs[MAX_NET_IFACES])

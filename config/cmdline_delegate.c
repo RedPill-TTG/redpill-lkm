@@ -52,19 +52,26 @@ static bool extract_boot_media_type(struct boot_media *boot_media, const char *p
     ensure_cmdline_param(CMDLINE_KT_SATADOM);
 
     char value = param_pointer[strlen_static(CMDLINE_KT_SATADOM)];
-    if (likely(value == '1')) {
-        boot_media->type = BOOT_MEDIA_SATA;
-        pr_loc_dbg("Boot media SATADOM requested");
-        return true;
-    }
 
-    if(value == '0') {
-        //There's no point to set that option but it's not an error
-        pr_loc_wrn("Boot media SATADOM disabled (default will be used, %s0 is a noop)", CMDLINE_KT_SATADOM);
-        return true; //setting it to 0 doesn't really make any sense but it's not an error
-    }
+    switch (value) {
+        case CMDLINE_KT_SATADOM_NATIVE:
+            boot_media->type = BOOT_MEDIA_SATA_DOM;
+            pr_loc_dbg("Boot media SATADOM (native) requested");
+            break;
 
-    pr_loc_err("Option \"%s%c\" is invalid (value should be 0 or 1)", CMDLINE_KT_SATADOM, value);
+        case CMDLINE_KT_SATADOM_FAKE:
+            boot_media->type = BOOT_MEDIA_SATA_DISK;
+            pr_loc_dbg("Boot media SATADISK (fake) requested");
+            break;
+
+        case CMDLINE_KT_SATADOM_DISABLED:
+            //There's no point to set that option but it's not an error
+            pr_loc_wrn("SATA-based boot media disabled (default will be used, %s0 is a noop)", CMDLINE_KT_SATADOM);
+            break;
+
+        default:
+            pr_loc_err("Option \"%s%c\" is invalid (value should be 0/1/2)", CMDLINE_KT_SATADOM, value);
+    }
 
     return true;
 }
@@ -353,23 +360,30 @@ int populate_cmdline_blacklist(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_
     ADD_BLACKLIST_ENTRY(0, CMDLINE_CT_VID);
     ADD_BLACKLIST_ENTRY(1, CMDLINE_CT_PID);
     ADD_BLACKLIST_ENTRY(2, CMDLINE_CT_MFG);
-    ADD_BLACKLIST_ENTRY(3, CMDLINE_KT_ELEVATOR);
-    ADD_BLACKLIST_ENTRY(4, CMDLINE_KT_LOGLEVEL);
-    ADD_BLACKLIST_ENTRY(5, CMDLINE_KT_PK_BUFFER);
-    ADD_BLACKLIST_ENTRY(6, CMDLINE_KT_EARLY_PK);
-    ADD_BLACKLIST_ENTRY(7, CMDLINE_KT_THAW);
+    ADD_BLACKLIST_ENTRY(3, CMDLINE_CT_DOM_SZMAX);
+    ADD_BLACKLIST_ENTRY(4, CMDLINE_KT_ELEVATOR);
+    ADD_BLACKLIST_ENTRY(5, CMDLINE_KT_LOGLEVEL);
+    ADD_BLACKLIST_ENTRY(6, CMDLINE_KT_PK_BUFFER);
+    ADD_BLACKLIST_ENTRY(7, CMDLINE_KT_EARLY_PK);
+    ADD_BLACKLIST_ENTRY(8, CMDLINE_KT_THAW);
+
+#ifndef NATIVE_SATA_DOM_SUPPORTED //on kernels without SATA DOM support we shouldn't reveal that it's a SATA DOM-boot
+    ADD_BLACKLIST_ENTRY(9, CMDLINE_KT_SATADOM);
+#endif
 
     return 0;
 }
 
 int extract_config_from_cmdline(struct runtime_config *config)
 {
+    int out = 0;
     char *cmdline_txt;
     kzalloc_or_exit_int(cmdline_txt, strlen_to_size(CMDLINE_MAX));
 
     if(get_kernel_cmdline(cmdline_txt, CMDLINE_MAX) <= 0) {
         pr_loc_crt("Failed to extract cmdline");
-        return -EIO;
+        out = -EIO;
+        goto exit_free;
     }
 
     pr_loc_dbg("Cmdline: %s", cmdline_txt);
@@ -400,12 +414,14 @@ int extract_config_from_cmdline(struct runtime_config *config)
         report_unrecognized_option(single_param_chunk)                   ;
     }
 
-    if (populate_cmdline_blacklist(config->cmdline_blacklist, &config->hw) != 0)
-        return -EIO;
+    if (populate_cmdline_blacklist(config->cmdline_blacklist, &config->hw) != 0) {
+        out = -EIO;
+        goto exit_free;
+    }
 
     pr_loc_inf("CmdLine processed successfully, tokens=%d", param_counter);
 
+    exit_free:
     kfree(cmdline_txt);
-
-    return 0;
+    return out;
 }

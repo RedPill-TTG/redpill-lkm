@@ -19,6 +19,7 @@
  *      - has platform dependent vendor/model strings of CONFIG_SYNO_SATA_DOM_VENDOR/CONFIG_SYNO_SATA_DOM_MODEL
  *      - has platform dependent vendor/model strings of CONFIG_SYNO_SATA_DOM_VENDOR_SECOND_SRC/CONFIG_SYNO_SATA_DOM_MODEL_SECOND_SRC
  *      - SATA DOM *cannot* be used to force-reinstall (as there isn't an equivalent of USB's VID/PID of 0xf401/0xf401)
+ *      - restrictions of native SATA-DOM are lifted by virtio_storage_shim.c and fake_sata_boot_shim.c
  *
  * There are other special ones (e.g. iSCSI) which aren't supported here. These only apply to small subset of platforms.
  *
@@ -36,6 +37,7 @@
 #include "../common.h"
 #include "../config/runtime_config.h"
 #include "boot_dev/usb_boot_shim.h"
+#include "boot_dev/fake_sata_boot_shim.h"
 #include "boot_dev/sata_boot_shim.h"
 
 #define BOOT_MEDIA_SHIM_NULL (-1)
@@ -55,8 +57,11 @@ int register_boot_shim(const struct boot_media *boot_dev_config)
         case BOOT_MEDIA_USB:
             out = register_usb_boot_shim(boot_dev_config);
             break;
-        case BOOT_MEDIA_SATA:
+        case BOOT_MEDIA_SATA_DOM:
             out = register_sata_boot_shim(boot_dev_config);
+            break;
+        case BOOT_MEDIA_SATA_DISK:
+            out = register_fake_sata_boot_shim(boot_dev_config);
             break;
         default:
             pr_loc_bug("Failed to %s - unknown type=%d", __FUNCTION__, boot_dev_config->type);
@@ -81,9 +86,11 @@ int unregister_boot_shim(void)
         case BOOT_MEDIA_USB:
             out = unregister_usb_boot_shim();
             break;
-        case BOOT_MEDIA_SATA:
+        case BOOT_MEDIA_SATA_DOM:
             out = unregister_sata_boot_shim();
             break;
+        case BOOT_MEDIA_SATA_DISK:
+            out = unregister_fake_sata_boot_shim();
         case BOOT_MEDIA_SHIM_NULL:
             pr_loc_bug("Boot shim is no registered");
             return -ENOENT;

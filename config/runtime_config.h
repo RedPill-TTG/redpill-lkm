@@ -33,7 +33,8 @@ typedef char cmdline_token[];
 
 enum boot_media_type {
     BOOT_MEDIA_USB,
-    BOOT_MEDIA_SATA
+    BOOT_MEDIA_SATA_DOM,
+    BOOT_MEDIA_SATA_DISK,
 };
 
 struct boot_media {
