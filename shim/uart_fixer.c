@@ -82,7 +82,7 @@ int register_uart_fixer(const hw_config_uart_fixer *hw)
 
     serial_swapped = hw->swap_serial;
 
-    shim_ureg_ok();
+    shim_reg_ok();
     return out;
 }
 
