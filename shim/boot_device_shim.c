@@ -42,10 +42,10 @@
 #include <linux/module.h> //struct module
 
 
-#define SBOOT_MFG_VID 0xf400 //Force-reinstall boot drive VID
-#define SBOOT_MFG_PID 0xf400 //Force-reinstall boot drive PID
-#define SBOOT_RET_VID 0xf401 //Retail boot drive VID
-#define SBOOT_RET_PID 0xf401 //Retail boot drive PID
+#define SBOOT_RET_VID 0xf400 //Retail boot drive VID
+#define SBOOT_RET_PID 0xf400 //Retail boot drive PID
+#define SBOOT_MFG_VID 0xf401 //Force-reinstall boot drive VID
+#define SBOOT_MFG_PID 0xf401 //Force-reinstall boot drive PID
 
 static bool module_notify_registered = false;
 static bool device_notify_registered = false;
