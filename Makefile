@@ -33,6 +33,11 @@ ifneq ($(STEALTH_MODE),)
 ccflags-y += -DSTEALTH_MODE=$(STEALTH_MODE)
 endif
 
+ifndef RP_VERSION_POSTFIX
+RP_VERSION_POSTFIX := $(shell git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null && echo -n "git-" && git log -1 --pretty='%h' 2>/dev/null || echo "???")
+endif
+ccflags-y += -DRP_VERSION_POSTFIX="\"$(RP_VERSION_POSTFIX)\""
+
 all:
 	$(MAKE) -C $(LINUX_SRC) M=$(PWD) modules
 clean:

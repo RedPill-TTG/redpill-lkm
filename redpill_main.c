@@ -17,12 +17,19 @@
 //Whether to cause a BUG() when module fails to load internally (which should be normally done on production)
 #define BUG_ON_LOAD_ERROR
 
+//Handle versioning stuff
+#define RP_VERSION_MAJOR 0
+#define RP_VERSION_MINOR 5
+#define STRINGIFY(x) #x
+#define VERSIONIFY(major,minor,postfix) "v" STRINGIFY(major) "." STRINGIFY(minor) "-" postfix
+#define RP_VERSION_STR VERSIONIFY(RP_VERSION_MAJOR, RP_VERSION_MINOR, RP_VERSION_POSTFIX)
+
 static int __init init_redpill(void)
 {
     int out = 0;
 
     pr_loc_dbg("================================================================================================");
-    pr_loc_inf("RedPill loading...");
+    pr_loc_inf("RedPill %s loading...", RP_VERSION_STR);
 
     if (
             (out = extract_config_from_cmdline(&current_config)) != 0 //This MUST be the first entry
@@ -41,11 +48,11 @@ static int __init init_redpill(void)
        )
         goto error_out;
 
-    pr_loc_inf("RedPill loaded (stealth=%d)", STEALTH_MODE);
+    pr_loc_inf("RedPill %s loaded (stealth=%d)", RP_VERSION_STR, STEALTH_MODE);
     return 0;
 
     error_out:
-        pr_loc_crt("RedPill cannot be loaded, error=%d", out);
+        pr_loc_crt("RedPill %s cannot be loaded, error=%d", RP_VERSION_STR, out);
 #ifdef BUG_ON_LOAD_ERROR
         BUG();
 #else
@@ -55,7 +62,7 @@ static int __init init_redpill(void)
 
 static void __exit cleanup_redpill(void)
 {
-    pr_loc_inf("RedPill unloading...");
+    pr_loc_inf("RedPill %s unloading...", RP_VERSION_STR);
 
     int (*cleanup_handlers[])(void ) = {
         uninitialize_stealth,
@@ -79,12 +86,12 @@ static void __exit cleanup_redpill(void)
 
     free_runtime_config(&current_config); //A special snowflake ;)
 
-    pr_loc_inf("RedPill is dead");
+    pr_loc_inf("RedPill %s is dead", RP_VERSION_STR);
     pr_loc_dbg("================================================================================================");
 }
 
 MODULE_AUTHOR("TTG");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("0.5");
+MODULE_VERSION(RP_VERSION_STR);
 module_init(init_redpill);
 module_exit(cleanup_redpill);
