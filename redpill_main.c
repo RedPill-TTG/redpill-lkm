@@ -23,14 +23,15 @@ static int __init init_redpill(void)
     register_boot_shim(&current_config.boot_media, &current_config.mfg_mode);
 
     if (
-         register_execve_interceptor() == 0 || //Register this reasonably high as other modules can use it blindly
-         register_bios_shim() == 0 ||
-         disable_common_executables() == 0 ||
-         register_fw_update_shim() == 0
+         register_execve_interceptor() != 0 || //Register this reasonably high as other modules can use it blindly
+         register_bios_shim() != 0 ||
+         disable_common_executables() != 0 ||
+         register_fw_update_shim() != 0
        )
         goto error_out;
 
     //All things below MUST be flag-based (either cmdline or device)
+
 
     pr_loc_inf("RedPill loaded");
 
@@ -57,6 +58,6 @@ static void __exit cleanup_redpill(void)
 
 MODULE_AUTHOR("TTG");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("0.1");
+MODULE_VERSION("0.5");
 module_init(init_redpill);
 module_exit(cleanup_redpill);
