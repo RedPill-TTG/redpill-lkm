@@ -2,6 +2,8 @@
 #define REDPILLLKM_OVERRIDE_KFUNC_H
 
 #include <linux/types.h>
+#include <linux/err.h> //PTR_ERR, IS_ERR
+
 typedef struct override_symbol_inst override_symbol_inst;
 
 /************************************************* Current interface **************************************************/
@@ -88,6 +90,19 @@ struct override_symbol_inst* __must_check override_symbol(const char *name, cons
  * @return 0 on success, -E on error
  */
 int restore_symbol(struct override_symbol_inst *sym);
+
+/**
+ * Frees the symbol previously reserved by get_ov_symbol_instance() (e.g. via override_symbol)
+ *
+ * !! READ THIS SERIOUS WARNING BELOW CAREFULLY !!
+ * STOP! DO NOT USE THIS if you don't understand what it does and why it exists. This function should be called from
+ * outside of this submodule ONLY if the overridden code disappeared from memory. This practically can happen only when
+ * you override a symbol inside of a loadable module and the module is unloaded. In ANY other case you must call
+ * restore_symbol() to actually restore the original code. This function simply "forgets" about the override and frees
+ * memory (as if external module has been unloaded we are NOT allowed to touch that memory anymore as it may be freed).
+ * It is explicitly NOT necessary to call this function after restore_symbol() as it does so internally.
+ */
+void put_overridden_symbol(struct override_symbol_inst *sym);
 
 /**
  * Check if the given symbol override is currently active

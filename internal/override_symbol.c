@@ -142,11 +142,9 @@ static void __always_inline set_symbol_ro(struct override_symbol_inst *sym)
     sym->mem_protected = true;
 }
 
-/**
- * Frees the symbol previously reserved by get_ov_symbol_instance()
- */
-static inline void put_ov_symbol_instance(struct override_symbol_inst *sym)
+void put_overridden_symbol(struct override_symbol_inst *sym)
 {
+    pr_loc_dbg("Freeing OVS for %s", sym->name);
     kfree(sym);
 }
 
@@ -170,7 +168,7 @@ static struct override_symbol_inst* get_ov_symbol_instance(const char *symbol_na
     sym->org_sym_ptr = (void *)kallsyms_lookup_name(sym->name);
     if (unlikely(sym->org_sym_ptr == 0)) { //header file: "Lookup the address for a symbol. Returns 0 if not found."
         pr_loc_err("Failed to locate vaddr for %s()", sym->name);
-        put_ov_symbol_instance(sym);
+        put_overridden_symbol(sym);
         return ERR_PTR(-EFAULT);
     }
     pr_loc_dbg("Saved %s() ptr <%p>", sym->name, sym->org_sym_ptr);
@@ -266,7 +264,7 @@ struct override_symbol_inst* __must_check override_symbol(const char *name, cons
     return sym;
 
     error_out:
-    put_ov_symbol_instance(sym);
+    put_overridden_symbol(sym);
     return ERR_PTR(out);
 }
 
@@ -283,7 +281,7 @@ int restore_symbol(struct override_symbol_inst *sym)
     pr_loc_dbg("Successfully restored original code of %s", sym->name);
 
     out_free:
-    put_ov_symbol_instance(sym);
+    put_overridden_symbol(sym);
     return out;
 }
 
