@@ -192,12 +192,11 @@ static long long opportunistic_read_capacity(struct scsi_device *sdp)
         //It can return 0 or a positive integer; 0 means immediate success where 1 means an error. Depending on the error
         //the command may be repeated.
         out = (use_cap16) ? scsi_read_cap16(sdp, buffer, &sshdr) : scsi_read_cap10(sdp, buffer, &sshdr);
-        if (out == 0) {
+        if (out == 0)
             break; //command just succeeded
-        }
 
         if (unlikely(out > 0)) { //it's technically an error but we may be able to recover
-            if (!use_cap16) { //if we previously used CAP(16) and it failed we can try older CAP(10) [even on hard-fail]
+            if (use_cap16) { //if we previously used CAP(16) and it failed we can try older CAP(10) [even on hard-fail]
                 use_cap16 = false;
                 continue;
             }
