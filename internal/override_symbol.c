@@ -36,7 +36,7 @@
 #include <asm/special_insns.h> //*_cr0()
 #include <asm/cacheflush.h> //PAGE_ALIGN
 #include <asm/asm-offsets.h> //__NR_syscall_max & NR_syscalls
-#include <generated/uapi/asm/unistd_64.h> //syscalls numbers (e.g. __NR_read)
+#include <asm/unistd_64.h> //syscalls numbers (e.g. __NR_read)
 #include <linux/kallsyms.h> //kallsyms_lookup_name()
 #include <linux/string.h> //memcpy()
 
@@ -99,7 +99,7 @@ static int enable_symbol_wp(const unsigned long vaddr)
 
 int override_symbol(const char *name, const void *new_sym_ptr, void * *org_sym_ptr, unsigned char *org_sym_code)
 {
-    pr_loc_dbg("Overriding %s() with f()<%p>", name, new_sym_ptr);
+    pr_loc_dbg("Overriding %s() with %pf()<%p>", name, new_sym_ptr, new_sym_ptr);
 
     *org_sym_ptr = (void *)kallsyms_lookup_name(name);
     if (*org_sym_ptr == 0) {
@@ -134,7 +134,7 @@ int override_symbol(const char *name, const void *new_sym_ptr, void * *org_sym_p
 
 int restore_symbol(void * org_sym_ptr, const unsigned char *org_sym_code)
 {
-    pr_loc_dbg("Restoring symbol @ %p", org_sym_ptr);
+    pr_loc_dbg("Restoring symbol @ %pf()<%p>", org_sym_ptr, org_sym_ptr);
 
     int out = disable_symbol_wp((long)org_sym_ptr);
     if (out != 0) //disable_symbol_wp() already logs what happened
@@ -144,7 +144,7 @@ int restore_symbol(void * org_sym_ptr, const unsigned char *org_sym_code)
     memcpy(org_sym_ptr, org_sym_code, OVERRIDE_JUMP_SIZE);
 
     out = enable_symbol_wp((long)org_sym_ptr); //already logs what happened if it failed
-    pr_loc_dbg("Symbol restored @ %p", org_sym_ptr);
+    pr_loc_dbg("Symbol restored @ %pf()<%p>", org_sym_ptr, org_sym_ptr);
 
     return 0;
 }
@@ -240,7 +240,7 @@ static int find_sys_call_table(void)
 static unsigned long *overridden_syscall[NR_syscalls] = { NULL };
 int override_syscall(unsigned int syscall_num, const void *new_sysc_ptr, void * *org_sysc_ptr)
 {
-    pr_loc_dbg("Overriding syscall #%d with f()<%p>", syscall_num, new_sysc_ptr);
+    pr_loc_dbg("Overriding syscall #%d with %pf()<%p>", syscall_num, new_sysc_ptr, new_sysc_ptr);
 
     int out = 0;
     if (unlikely(!syscall_table_ptr)) {
