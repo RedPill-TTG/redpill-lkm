@@ -161,6 +161,7 @@ static const int fake_smart[][ATA_SMART_RECORD_LEN] = {
 
 //SMART components versions (some of them CANNOT be changed)
 #define SMART_SNAP_VERSION 0x01 //version for the live data snapshot; vendor-specific
+#define WIN_SMART_DIG_LOG_VERSION 0x00 //WIN_SMART log directory version; see 8.55.6.8.1 for details
 #define WIN_SMART_SUM_LOG_VERSION 0x01 //WIN_SMART summary log version; ALWAYS 1 as per ATAPI/6 sec. 8.55.6.8.2.1
 #define WIN_SMART_COMP_LOG_VERSION 0x01 //WIN_SMART comprehensive log version; ALWAYS 1 as per ATAPI/6 sec. 8.55.6.8.3.1
 #define WIN_SMART_TEST_LOG_VERSION 0x01 //WIN_SMART self-test log version; ALWAYS 1 as per ATAPI/6 sec. 8.55.6.8.4.1
@@ -531,11 +532,19 @@ static int populate_win_smart_log(const u8 *req_header, void __user *buff_ptr)
 
     //See "Table 62 − Log address definition" in ATAPI/6 docs
     switch (req_header[HDIO_DRIVE_CMD_HDR_SEC_NUM]) {
+        case 0x00: //log directory. While the spec says it's optional supporting it means fewer calls to other ones
+            //we're indicating that we DO support multi-sector logging to avoid further log-read logic complexity. If
+            // the support is indicated as absent all reads to logs at index 0 must return "command aborted" response
+            smart_log[0] = WIN_SMART_DIG_LOG_VERSION;
+            //if every other byte is zero we can ignore the rest of the fields according to Table 63. We also SHOULD NOT
+            // generate a checksum for log directory (despite all others using checksums...)
+
         case 0x01: //summary SMART error log (see sect. 8.55.6.8.2 Summary error log sector)
             smart_log[0] = WIN_SMART_SUM_LOG_VERSION;
             smart_log[1] = 0x00; //no error entries = index is 0
             smart_log[452] = 0x00; //no errors = count byte 1 is zero
             smart_log[453] = 0x00; //no errors = count byte 2 is zero
+            ata_calc_sector_checksum(smart_log);
             break;
 
         case 0x02: //comprehensive SMART error log
@@ -543,12 +552,14 @@ static int populate_win_smart_log(const u8 *req_header, void __user *buff_ptr)
             smart_log[1] = 0x00; //no error entries = index is 0
             smart_log[452] = 0x00; //no errors = count byte 1 is zero
             smart_log[453] = 0x00; //no errors = count byte 2 is zero
+            ata_calc_sector_checksum(smart_log);
             break;
 
         case 0x06: //SMART self-test log
             smart_log[0] = WIN_SMART_TEST_LOG_VERSION;
             smart_log[1] = 0x00; //revision (2nd byte, also defined by 8.55.6.8.4.1)
             smart_log[508] = 0x00; //no errors
+            ata_calc_sector_checksum(smart_log);
             break;
 
         default: //other ones are reserved/vendor/etc
@@ -557,8 +568,6 @@ static int populate_win_smart_log(const u8 *req_header, void __user *buff_ptr)
             kfree(kbuf);
             return -EIO;
     }
-
-    ata_calc_sector_checksum(smart_log);
 
     if (copy_to_user(buff_ptr, kbuf, ata_ioctl_buf_size(ATA_WIN_SMART_READ_LOG_SECTORS)) != 0) {
         pr_loc_err("Failed to copy WIN_SMART LOG packet to user ptr=%p", buff_ptr);
