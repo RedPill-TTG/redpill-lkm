@@ -204,19 +204,21 @@ int register_native_sata_boot_shim(const struct boot_media *config)
 {
     shim_reg_in();
 
+    //Regardless of the method we must set the expected size (in config) as shim may be called any moment from now on
+    boot_dev_config = config;
+    int out = 0;
+
     if (unlikely(boot_dev_config->type != BOOT_MEDIA_SATA_DOM)) {
         pr_loc_bug("%s doesn't support device type %d", __FUNCTION__, boot_dev_config->type);
-        return -EINVAL;
+        out = -EINVAL;
+        goto fail;
     }
 
     if (unlikely(shim_registered)) {
         pr_loc_bug("Native SATA boot shim is already registered");
-        return -EEXIST;
+        out = -EEXIST;
+        goto fail;
     }
-
-    //Regardless of the method we must set the expected size (in config) as shim may be called any moment from now on
-    boot_dev_config = config;
-    int out = 0;
 
     /* We always set-up watching for new devices, as the SCSI notifier is smart enough to accept new subscribers
      * regardless of the driver state, but if the driver is already loaded we also need to take care of existing devs.
