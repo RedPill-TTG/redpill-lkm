@@ -2,7 +2,6 @@
 #define REDPILLLKM_RUNTIME_CONFIG_H
 
 #include "uart_defs.h" //UART config values
-#include "../shim/pci_shim.h" //pci_shim_device_type
 #include <linux/types.h> //bool
 
 //These below are currently known runtime limitations
@@ -15,10 +14,6 @@
 #endif
 
 //UART-related constants were moved to uart_defs.h, to allow subcomponents to importa a smaller subset than this header
-
-//Defines below are experimentally determined to be sufficient but can often be changed
-#define MAX_VPCI_BUSES 8 //adjust if needed, max 256
-#define MAX_VPCI_DEVS 16 //adjust if needed, max 256*32=8192
 #define MODEL_MAX_LENGTH 10
 #define SN_MAX_LENGTH 13
 
@@ -49,26 +44,7 @@ struct boot_media {
     unsigned long dom_size_mib; //Max size of SATA DOM            Default: 1024 <valid, READ native_sata_boot_shim.c!!!>
 };
 
-struct vpci_device_stub {
-    enum pci_shim_device_type type;
-    u8 bus;
-    u8 dev;
-    u8 fn;
-    bool multifunction:1;
-};
-
-struct hw_config {
-    const char *name; //the longest so far is "RR36015xs+++" (12+1)
-
-    struct vpci_device_stub pci_stubs[MAX_VPCI_DEVS];
-
-    //All custom flags
-    bool emulate_rtc:1;
-    bool swap_serial:1; //Whether ttyS0 and ttyS1 are swapped (reverses CONFIG_SYNO_X86_SERIAL_PORT_SWAP)
-    bool reinit_ttyS0:1; //Should the ttyS0 be forcefully re-initialized after module loads
-    bool fix_disk_led_ctrl:1; //Disabled libata-scsi bespoke disk led control (which often crashes some v4 platforms)
-};
-
+struct hw_config;
 struct runtime_config {
     syno_hw hw; //used to determine quirks.                                Default: empty <invalid>
     serial_no sn; //Used to validate it and warn the user.                 Default: empty <invalid>

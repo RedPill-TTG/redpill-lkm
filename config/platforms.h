@@ -6,6 +6,7 @@
 #define REDPILLLKM_PLATFORMS_H
 
 #include "../shim/pci_shim.h"
+#include "platform_types.h"
 const struct hw_config supported_platforms[] = {
     {
         .name = "DS3615xs",

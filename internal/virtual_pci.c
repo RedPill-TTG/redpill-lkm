@@ -170,7 +170,7 @@
  */
 #include "virtual_pci.h"
 #include "../common.h"
-#include "../config/runtime_config.h" //MAX_VPCI_BUSES
+#include "../config/vpci_types.h" //MAX_VPCI_BUSES
 #include <linux/pci.h>
 #include <linux/pci_regs.h> //PCI device header constants
 #include <linux/pci_ids.h> //Constants for vendors, classes, and other

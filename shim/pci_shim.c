@@ -3,7 +3,8 @@
 #include "pci_shim.h"
 #include "shim_base.h"
 #include "../common.h"
-#include "../config/runtime_config.h"
+#include "../config/vpci_types.h" //MAX_VPCI_DEVS, pci_shim_device_type
+#include "../config/platform_types.h" //hw_config
 #include "../internal/virtual_pci.h"
 #include <linux/pci_ids.h>
 

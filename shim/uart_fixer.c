@@ -3,7 +3,8 @@
 #include "uart_fixer.h"
 #include "shim_base.h"
 #include "../common.h"
-#include "../config/runtime_config.h" //hw_config
+#include "../config/runtime_config.h" //STD_COM*
+#include "../config/platform_types.h" //hw_config
 #include "../internal/call_protected.h" //early_serial_setup()
 #include "../internal/override_symbol.h" //overriding uart_match_port()
 #include <linux/serial_8250.h> //serial8250_unregister_port
