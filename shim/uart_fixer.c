@@ -6,7 +6,13 @@
 #include "../internal/uart/uart_defs.h" //struct uart_port, COM ports definition, UART_NR
 #include <linux/serial_8250.h> //serial8250_unregister_port
 
-#ifdef UART_BUG_SWAPPED
+#ifdef DBG_DISABLE_UART_SWAP_FIX
+static int noinline uart_swap_hw_output(unsigned int from, unsigned char to)
+{
+    pr_loc_wrn("UART swapping needed for the platform but forcefully disabled via DBG_DISABLE_UART_SWAP");
+    return 0;
+}
+#elif defined(UART_BUG_SWAPPED)
 #include "../internal/uart/uart_swapper.h"
 #else
 static int noinline uart_swap_hw_output(unsigned int from, unsigned char to)

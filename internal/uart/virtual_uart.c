@@ -87,7 +87,20 @@
  * These definitions are exactly the same as in arch/x86/include/asm/serial.h
  */
 static struct serial8250_16550A_vdev ttySs[] = {
-#ifdef UART_BUG_SWAPPED //we are crying too
+//we're crying too... the issue is normally operate on port lines (=ttyS#) but during port registration ports the driver
+// performs matching based on its internal iobase mapping, so we can ask for the port to be line=0 but if the driver
+// finds a port with iobase specified under line=1 it will just register is as line=1 instead of line=0. This causes all
+// sorts of problems as during reads we expect the vdev line to match what we actually registered. To fix it and make it
+// independent of all fucking swapping and reswapping we will have to emit events from uart_swapper and other nonsense
+// ...this is ridiculous. So we take a sane assumptions:
+//  - if the kernel is broken we accommodate for that assuming no un-swapping will be done afterwards
+//  - if the kernel is broken and swap fix is disabled by debug flag we handle the swapping
+//  - if something is borked we don't offer a detection comparing lines because before we get a response from the driver
+//    registering the port it will call our read function and break everything
+// TODO: this whole code should switch to relying on iobases instead o lines. This way when we do reads or writes we
+//       don't care if something is swapped - we call for registration on line 0, we lookup what's the expected iobase
+//       for that ttyS and we register for it. If the driver decides to use a different line# we shouldn't care.
+#if defined(UART_BUG_SWAPPED) && defined(DBG_DISABLE_UART_SWAP_FIX)
     [0]	= { .line = 0, .iobase = STD_COM2_IOBASE, .irq = STD_COM2_IRQ, .baud = STD_COMX_BAUD }, //COM1 aka ttyS1
     [1]	= { .line = 1, .iobase = STD_COM1_IOBASE, .irq = STD_COM1_IRQ, .baud = STD_COMX_BAUD }, //COM2 aka ttyS0
 #else

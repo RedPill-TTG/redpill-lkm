@@ -1,6 +1,17 @@
 #ifndef REDPILLLKM_COMMON_H
 #define REDPILLLKM_COMMON_H
 
+/******************************************** Available whole-module flags ********************************************/
+//This (shameful) flag disables shims which cannot be properly unloaded to make debugging of other things easier
+#define DBG_DISABLE_UNLOADABLE
+
+//disabled uart unswapping even if needed (useful for hand-loading while running)
+#define DBG_DISABLE_UART_SWAP_FIX
+
+//Whether to cause a kernel panic when module fails to load internally (which should be normally done on production)
+#define KP_ON_LOAD_ERROR
+/**********************************************************************************************************************/
+
 #include "internal/stealth.h"
 #include <linux/init.h>
 #include <linux/kernel.h>

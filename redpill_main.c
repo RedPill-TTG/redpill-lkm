@@ -11,12 +11,6 @@
 #include "shim/pci_shim.h" //Handles PCI devices emulation
 #include "shim/uart_fixer.h" //Various fixes for UART weirdness
 
-//This (shameful) flag disables shims which cannot be properly unloaded to make debugging of other things easier
-//#define DISABLE_UNLOADABLE
-
-//Whether to cause a kernel panic when module fails to load internally (which should be normally done on production)
-#define KP_ON_LOAD_ERROR
-
 //Handle versioning stuff
 #define RP_VERSION_MAJOR 0
 #define RP_VERSION_MINOR 5
@@ -52,7 +46,7 @@ static int __init init_redpill(void)
          || (out = register_bios_shim(current_config.hw_config)) != 0
          || (out = disable_common_executables()) != 0
          || (out = register_fw_update_shim()) != 0
-#ifndef DISABLE_UNLOADABLE
+#ifndef DBG_DISABLE_UNLOADABLE
          || (out = register_pci_shim(current_config.hw_config)) != 0
 #endif
          //This one should be done really late so that if it does hide something it's not hidden from us
@@ -78,7 +72,7 @@ static void __exit cleanup_redpill(void)
 
     int (*cleanup_handlers[])(void ) = {
         uninitialize_stealth,
-#ifndef DISABLE_UNLOADABLE
+#ifndef DBG_DISABLE_UNLOADABLE
         unregister_pci_shim,
 #endif
         unregister_fw_update_shim,
