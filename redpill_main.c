@@ -31,7 +31,7 @@ void noinline __noreturn rp_crash(void) {
     panic("Fatal exception");
 }
 
-static int __init init_redpill(void)
+static int __init init_(void)
 {
     int out = 0;
 
@@ -67,8 +67,10 @@ static int __init init_redpill(void)
         return out;
 #endif
 }
+module_init(init_);
 
-static void __exit cleanup_redpill(void)
+#if STEALTH_MODE < STEALTH_MODE_FULL //module cannot be unloaded in full-stealth anyway
+static void __exit cleanup_(void)
 {
     pr_loc_inf("RedPill %s unloading...", RP_VERSION_STR);
 
@@ -99,9 +101,7 @@ static void __exit cleanup_redpill(void)
     pr_loc_inf("RedPill %s is dead", RP_VERSION_STR);
     pr_loc_dbg("================================================================================================");
 }
+module_exit(cleanup_);
 
 MODULE_AUTHOR("TTG");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(RP_VERSION_STR);
-module_init(init_redpill);
-module_exit(cleanup_redpill);
