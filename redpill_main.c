@@ -14,8 +14,8 @@
 //This (shameful) flag disables shims which cannot be properly unloaded to make debugging of other things easier
 //#define DISABLE_UNLOADABLE
 
-//Whether to cause a BUG() when module fails to load internally (which should be normally done on production)
-#define BUG_ON_LOAD_ERROR
+//Whether to cause a kernel panic when module fails to load internally (which should be normally done on production)
+#define KP_ON_LOAD_ERROR
 
 //Handle versioning stuff
 #define RP_VERSION_MAJOR 0
@@ -23,6 +23,18 @@
 #define STRINGIFY(x) #x
 #define VERSIONIFY(major,minor,postfix) "v" STRINGIFY(major) "." STRINGIFY(minor) "-" postfix
 #define RP_VERSION_STR VERSIONIFY(RP_VERSION_MAJOR, RP_VERSION_MINOR, RP_VERSION_POSTFIX)
+
+/**
+ * Force panic to land on a stack trace
+ *
+ * This ensures we always get this on the stack trace so that we know it was an intentional crash due to a detected
+ * error rather than an accidental bug.
+ */
+void noinline __noreturn rp_crash(void) {
+    //Deliberately not reveling any context in case we're running in stealth mode
+    //This message is a generic one from arch/x86/kernel/dumpstack.c
+    panic("Fatal exception");
+}
 
 static int __init init_redpill(void)
 {
@@ -53,8 +65,8 @@ static int __init init_redpill(void)
 
     error_out:
         pr_loc_crt("RedPill %s cannot be loaded, error=%d", RP_VERSION_STR, out);
-#ifdef BUG_ON_LOAD_ERROR
-        BUG();
+#ifdef KP_ON_LOAD_ERROR
+        rp_crash();
 #else
         return out;
 #endif
