@@ -51,6 +51,33 @@
  * To avoid any crashes and possible data loss we are never touching disks which aren't SATA and matching the size
  * match criterion. In other words this shim will NOT yank a data drive from the system.
  *
+ * WHAT IF THIS CODE LOADS BEFORE THE DRIVER?!
+ * Despite the SCSI driver being one of the first things loaded by the kernel and something which almost everywhere is
+ * baked into to kernel there's a way to load our module earlier (via ioscheduler). In such case we cannot even use
+ * driver_find("sd", ...) as it will return NULL (since there's no driver for "sd" *yet*). In such case we can hook
+ * "scsi_register_driver()" which is an exported symbol (==it will last) and keep it hooked until we find the
+ * registration of "sd" driver in particular (as SCSI also handles CDROMs, USBs, iSCSI and others)
+ *
+ * THE FINAL PICTURE
+ * Ok, it is pretty complex indeed. Here's the decision tree this submodule goes through:
+ *  register_sata_boot_shim()
+ *   => find_driver("sd", ...)
+ *      ===FOUND===
+ *        + shim sd_probe() to sd_probe_shim()
+ *            <will shim vendor/model if appropriate for every newly plugged/re-plugged device>
+ *        + probe_existing_devices()
+ *            <iterate through all, find if any matches, if so disconnect it (which will prompt it to trigger sd_probe)>
+ *      ===NOT FOUND===
+ *        + override scsi_register_driver() [using start_scsi_register_driver_watcher()]
+ *            <it will "wait" until the driver attempts to register>
+ *           ===scsi_register_driver() called & drv->name is "sd"=== [see scsi_register_driver_shim()]
+ *            + modify drv->probe to &sd_probe_shim
+ *            + stop_scsi_register_driver_watcher()
+ *               <we don't want to provide our own implementation of scsi_register_driver()>
+ *            + call [now original] scsi_register_driver()
+ *               <this will trigger sd_probe_shim() when disk is detected and shimming will happen; no need to call
+ *                probe_existing_devices() here as the driver JUST registered>
+ *
  * KNOWN LIMITATIONS
  * If you hot-unplug that SATA drive which is used for synoboot it will NOT be shimmed the next time you plug it without
  * rebooting. This is because we were lazy and didn't implement the removal shimming (as this behavior isn't defined
@@ -69,6 +96,7 @@
 
 #ifdef NATIVE_SATA_DOM_SUPPORTED
 #include "../../internal/call_protected.h" //scsi_scan_host_selected()
+#include "../../internal/override_symbol.h"
 #include <linux/dma-direction.h> //DMA_FROM_DEVICE
 #include <linux/unaligned/be_byteshift.h> //get_unaligned_be32()
 #include <linux/delay.h> //msleep
@@ -77,6 +105,7 @@
 #include <scsi/scsi_host.h> //struct Scsi_Host
 #include <scsi/scsi_transport.h> //struct scsi_transport_template
 #include <scsi/scsi_device.h> //scsi_execute_req()
+#include <scsi/scsi_driver.h> //scsi_register_driver()
 
 #define SCSI_RC16_LEN 32 //originally defined in drivers/scsi/sd.c as RC16_LEN
 #define SCSI_CMD_TIMEOUT (30 * HZ) //originally defined in drivers/scsi/sd.h as SD_TIMEOUT
@@ -89,6 +118,9 @@
 #define SERVICE_ACTION_IN_16 SERVICE_ACTION_IN
 #endif
 
+static int scsi_register_driver_shim(struct device_driver *drv);
+
+/*********************************** Determining SCSI device viability for shimming ***********************************/
 /**
  * Issues SCSI "READ CAPACITY (16)" command
  * Make sure you read what this function returns!
@@ -240,8 +272,8 @@ static unsigned long max_dom_size_mib = 0; //this will be set during register
 bool device_mapped = false;
 static bool inline is_shim_target(struct scsi_device *sdp)
 {
-    pr_loc_dbg("Probing SATA disk id=%u channel=%u vendor=\"%s\" model=\"%s\"", sdp->id, sdp->channel, sdp->vendor,
-               sdp->model);
+    pr_loc_dbg("Checking if SATA disk is a shim target - id=%u channel=%u vendor=\"%s\" model=\"%s\"", sdp->id,
+               sdp->channel, sdp->vendor, sdp->model);
 
     long long capacity_mib = opportunistic_read_capacity(sdp);
     if (capacity_mib < 0) {
@@ -266,9 +298,11 @@ static bool inline is_shim_target(struct scsi_device *sdp)
     return true;
 }
 
+/*********************************** Interacting with an active/loaded SCSI driver ************************************/
 static int (*org_sd_probe) (struct device *dev) = NULL; //set during register
 static int sd_probe_shim(struct device *dev)
 {
+    pr_loc_dbg("Probing SCSI device using %s", __FUNCTION__);
     if (!is_sata_disk(dev)) {
         pr_loc_dbg("%s: new SCSI device connected - it's not a SATA disk, ignoring", __FUNCTION__);
         goto proxy;
@@ -276,7 +310,7 @@ static int sd_probe_shim(struct device *dev)
 
     struct scsi_device *sdp = to_scsi_device(dev);
     if (is_shim_target(sdp)) {
-        pr_loc_dbg("Shimming device with capacity of to vendor=\"%s\" model=\"%s\"", CONFIG_SYNO_SATA_DOM_VENDOR,
+        pr_loc_dbg("Shimming device to vendor=\"%s\" model=\"%s\"", CONFIG_SYNO_SATA_DOM_VENDOR,
                    CONFIG_SYNO_SATA_DOM_MODEL);
         sdp->vendor = CONFIG_SYNO_SATA_DOM_VENDOR;
         sdp->model = CONFIG_SYNO_SATA_DOM_MODEL;
@@ -284,22 +318,32 @@ static int sd_probe_shim(struct device *dev)
     }
 
     proxy:
+    pr_loc_dbg("Handing over probing from %s to %pf", __FUNCTION__, org_sd_probe);
     return org_sd_probe(dev);
 }
 
-//int bus_for_each_dev(struct bus_type *bus, struct device *start, void *data,
-//		     int (*fn)(struct device *dev, void *data));
-//bus_for_each_dev
+static inline void install_sd_probe_shim(struct device_driver *drv)
+{
+    pr_loc_dbg("Overriding %pf()<%p> with %pf()<%p>", drv->probe, drv->probe, sd_probe_shim, sd_probe_shim);
+    org_sd_probe = drv->probe;
+    drv->probe = sd_probe_shim;
+}
 
-struct scsi_disk_stub {
-    struct scsi_driver *driver;
-    struct scsi_device *device;
-    struct device	dev;
-    struct gendisk	*disk;
-    atomic_t	openers;
-    sector_t	capacity;
-    u32		max_ws_blocks;
-};
+static inline void uninstall_sd_probe_shim(struct device_driver *drv)
+{
+    if (unlikely(!org_sd_probe)) {
+        pr_loc_wrn(
+                "Cannot %s - original drv->probe is not saved. It was either never installed or it's a bug. "
+                "The current drv->probe is %pf()<%p>",
+                __FUNCTION__, drv->probe, drv->probe);
+        return;
+    }
+
+    pr_loc_dbg("Restoring %pf()<%p> to %pf()<%p>", drv->probe, drv->probe, org_sd_probe, org_sd_probe);
+    drv->probe = org_sd_probe;
+    org_sd_probe = NULL;
+}
+
 
 /**
  * Processes existing device and if it's a SATA drive which matches shim criteria it will be unplugged & replugged to be
@@ -357,7 +401,104 @@ static void inline probe_existing_devices(struct device_driver *drv)
     pr_loc_dbg("bus_for_each_dev returned %d", code);
 }
 
+/**************************************** Handling not-yet-loaded SCSI driver *****************************************/
+DEFINE_OVSYMBOL_PTRS(scsi_register_driver);
 extern struct bus_type scsi_bus_type;
+
+/**
+ * Registers a watcher for situations where SCSI driver we are looking for is not yet registered with the kernel
+ *
+ * @return 0 on success, -E on error
+ */
+static int start_scsi_register_driver_watcher(void)
+{
+    pr_loc_dbg("Overriding scsi_register_driver to watch for SCSI driver registration");
+
+    if (unlikely(scsi_register_driver_addr)) {
+        pr_loc_bug("Called %s after it's already registered", __FUNCTION__);
+        return 0; //technically it's not an error as it's working
+    }
+
+    ALLOC_OVSYMBOL_PTRS(scsi_register_driver);
+    int out = override_symbol("scsi_register_driver", scsi_register_driver_shim, &scsi_register_driver_addr,
+                              scsi_register_driver_code);
+    if (out != 0) {
+        pr_loc_err("Failed to override scsi_register_driver - we will miss the driver loading");
+        FREE_OVSYMBOL_PTRS(scsi_register_driver);
+        return out;
+    }
+
+    return 0;
+}
+
+/**
+ * Reverses start_scsi_register_driver_watcher()
+ *
+ * @return 0 on success, -E on error
+ */
+static int stop_scsi_register_driver_watcher(void)
+{
+    if (unlikely(!scsi_register_driver_addr)) {
+        //It's a debug log and not bug/warn as we blindly call this function - the watcher may or may not be registered
+        // depending on when this module was loaded and if the watcher was even needed (see file comment for details)
+        pr_loc_dbg("Called %s but watcher is not registered (you can safely ignore this)", __FUNCTION__);
+        return 0; //technically it's not an error as it was removed
+    }
+
+    int out = restore_symbol(scsi_register_driver_addr, scsi_register_driver_code);
+    FREE_OVSYMBOL_PTRS(scsi_register_driver);
+
+    if (out == 0)
+        pr_loc_dbg("Successfully restored scsi_register_driver");
+    else
+        pr_loc_err("Failed to restore scsi_register_driver - error=%d", out);
+
+    return out;
+}
+
+/**
+ * Watches for SCSI sd driver registration and if found replaces original probe callback with sd_probe_shim()
+ *
+ * This shim doesn't replace the logic in any way - it just serves as a middle man
+ *
+ * @return 0 on success, -EBUSY on error (following the real command)
+ */
+static int scsi_register_driver_shim(struct device_driver *drv)
+{
+    pr_loc_dbg("SCSI driver registering via %s with driver name=%s", __FUNCTION__, drv->name);
+
+    bool is_sd = (strcmp(drv->name, "sd") == 0);
+    if (likely(is_sd)) { //this is usually executed on the very first call to this shim
+        pr_loc_dbg("SCSI driver attempts to register \"sd\" driver - replacing probe");
+        /* Warning: we're chaining the pointer here and this pointer is (as of now) point to a SHARED TEMPLATE in
+         * drivers/scsi/sd.c. That means that this change must be reversed when this module is unloaded. However, this
+         * isn't a big of a problem as during unregister we use driver_find() to restore the probe ptr. If the driver
+         * was registered before the probe will be restored (=no problem); if it wasn't it means we neer changed the
+         * probe ptr (=also no problem)
+         */
+        install_sd_probe_shim(drv);
+    }
+
+    //We MUST abort here if it fails - if we continue and call what-we-believe-is scsi_register_driver() we can loop!
+    //Returning this error may actually cause KP on Linux v3 because SCSI driver has a null-ptr bug but there's nothing
+    // we can do about that (and this is how the native driver_register() works as well).
+    if (stop_scsi_register_driver_watcher() != 0) {
+        pr_loc_bug("Aborting driver registration due to watcher stop failure");
+        return -EBUSY;
+    }
+
+    int out = scsi_register_driver(drv);
+    //if we didn't get the sd shim we need to continue listening; restoring it is slow but this code path is included
+    // "just-in-case" as of now we've only seen "sd" driver being registered as the first one
+    if (unlikely(!is_sd))
+        start_scsi_register_driver_watcher();
+
+    return out;
+}
+
+// We need an additional flag as depending on which method of sd_probe override (watcher vs. existing driver) we may
+//  not have "org_sd_probe" yet (imagine we registered AND tried to unregister before SCSI sd driver loaded).
+static bool shim_registered = false;
 int register_sata_boot_shim(const struct boot_media *boot_dev_config)
 {
     if (unlikely(boot_dev_config->type != BOOT_MEDIA_SATA)) {
@@ -365,51 +506,77 @@ int register_sata_boot_shim(const struct boot_media *boot_dev_config)
         return -EINVAL;
     }
 
-    if (unlikely(org_sd_probe)) {
+    if (unlikely(shim_registered)) {
         pr_loc_bug("SATA boot shim is already registered");
         return -EEXIST;
     }
 
+    //Regardless of the method we must set the expected size as shim may be called any moment from now on
+    max_dom_size_mib = boot_dev_config->dom_size_mib;
+    int out = 0;
+
     struct device_driver *drv = driver_find("sd", &scsi_bus_type);
-    if (IS_ERR(drv)) {
+    /* This is crucial - the SCSI sd driver may not be loaded (yet) if we were called REALLY early (i.e. during kernel
+     * init). Thus, we need to switch to either replace ->probe callback (while taking care of possibly already probed
+     * disks) or instead watch for the driver registration and replace ->probe during registration.
+     */
+    if (unlikely(IS_ERR(drv))) { //driver_find flat out failed
         pr_loc_crt("Failed to get sd driver from kernel");
-        return PTR_ERR(drv);
+        out = PTR_ERR(drv);
+        goto fail;
+    } else if (drv) { //driver_find found the SCSI sd driver
+        pr_loc_dbg("SCSI sd driver registered - overriding probe & examining existing devices");
+        pr_loc_dbg("Setting detection primitives");
+        install_sd_probe_shim(drv);
+
+        //Some devices may already be scanned (most likely all if SD was non-modular as it usually is) - we need to scan
+        // them as well and if they match shimming criteria kick them out of the controller and re-probe so that they go
+        // through sd_probe_shim(). Their capacity will be read twice but there's no really way around that (see the
+        // comment in on_existing_device()).
+        probe_existing_devices(drv);
+    } else { //driver_find succeeded but the SCSI sd driver is not registered
+        pr_loc_dbg("SCSI sd driver not registered - hooking driver registration path");
+        out = start_scsi_register_driver_watcher();
+        if (out != 0) {
+            pr_loc_crt("Failed to register SCSI sd driver watcher, error=%d", out);
+            goto fail;
+        }
     }
 
-    //Order of these sets is important as we don't acquire a lock
-    max_dom_size_mib = boot_dev_config->dom_size_mib;
-    org_sd_probe = drv->probe;
-    drv->probe = sd_probe_shim;
-
-    //Some devices may already be scanned (most likely all if SD was non-modular as it usually is) - we need to scan
-    // them as well and if they match shimming criteria kick them out of the controller and re-probe so that they go
-    // through sd_probe_shim(). Their capacity will be read twice but there's no really way around that (see the
-    // comment in on_existing_device()).
-    probe_existing_devices(drv);
-
+    shim_registered = true;
     pr_loc_dbg("SATA boot shim registered");
     return 0;
+
+    fail:
+    max_dom_size_mib = 0;
+    return out;
 }
 
 int unregister_sata_boot_shim(void)
 {
-    if (unlikely(!org_sd_probe)) {
+    if (unlikely(!shim_registered)) {
         pr_loc_bug("SATA boot shim is not registered");
         return -ENOENT;
     }
 
+    int out = stop_scsi_register_driver_watcher(); //We can call it blindly, it will be a noop if not registered
+    if (out != 0)
+        pr_loc_err("Failed to stop SCSI sd driver watcher"); //not returning on this, we should try to restore sd_probe
+
     struct device_driver *drv = driver_find("sd", &scsi_bus_type);
     if (IS_ERR(drv)) {
-        pr_loc_crt("Failed to get sd driver from kernel");
-        return PTR_ERR(drv);
+        pr_loc_err("Failed to get sd driver from kernel");
+        if (org_sd_probe)
+            pr_loc_bug("sd_probe() is shimmed but we cannot restore it due to driver_find() error - kernel WILL crash");
+        return PTR_ERR(drv); //that's critical: if we cannot get the driver we're leaving in an unknown state
     }
 
     //Order of these sets is important as we don't acquire a lock
-    drv->probe = org_sd_probe;
-    org_sd_probe = NULL;
+    uninstall_sd_probe_shim(drv);
     max_dom_size_mib = 0;
     //we are consciously NOT clearing device_mapped. It may be registered and we're not doing anything to unregister it
 
+    shim_registered = false;
     pr_loc_dbg("SATA boot shim unregistered");
     return 0;
 }
