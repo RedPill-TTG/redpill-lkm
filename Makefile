@@ -22,6 +22,7 @@ OBJS   = $(SRCS-y:.c=.o)
 obj-m += redpill.o
 redpill-objs := $(OBJS)
 ccflags-y += -std=gnu99 -fgnu89-inline -Wno-declaration-after-statement -g -fno-inline
+ccflags-y += -I$(src)/compat/toolkit/include
 
 ifneq ($(STEALTH_MODE),)
 ccflags-y += -DSTEALTH_MODE=$(STEALTH_MODE)

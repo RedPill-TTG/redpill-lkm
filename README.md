@@ -17,7 +17,7 @@ Synology's DSM Linux distribution.
 
 Read about the quirk in a separate repo: https://github.com/RedPill-TTG/dsm-research/tree/master/quirks
 
-## How to build?
+## How to build with Linux sources?
 1. You need Synology's GPL sources for the kernel. Check the [Makefile](Makefile) for details
 2. `cd` to kernel sources
 3. Depending on the version:  
@@ -31,6 +31,21 @@ Read about the quirk in a separate repo: https://github.com/RedPill-TTG/dsm-rese
 6. `make LINUX_SRC=....` (path to linux sources, default: `./linux-3.10.x-bromolow-25426`)
 7. You will get a `redpill.ko` module as the result, you can `insmod` it
 
+
+## How to build with syno toolkit?
+The procedure to build with the toolkit is **not recommended**. However, some versions lack the kernel sources 
+(e.g. v7 now) and thus can only use this method.
+
+1. Get the appropriate toolkit from the [official SF repo](https://sourceforge.net/projects/dsgpl/files/toolkit/)
+    - You want to get the `.dev.txz` file for the corresponding platform (e.g. `ds.bromolow-7.0.dev.txz`)
+    - You only need to unpack a part of it: `tar -xvf ds.bromolow-7.0.dev.txz usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.0/build`
+    - If the path above changed you can use `tar -tvf ds.bromolow-7.0.dev.txz | grep kfifo.h` to find the correct one
+2. `cd` to the module directory
+3. `make LINUX_SRC=<toolkit-directory>/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.0/build`
+4. You will get a `redpill.ko` module as the result, you can `insmod` it
+
+
+## Additional make options
 While calling `make` you can also add these additional modifiers (e.g. `make FOO BAR`):
  - `DBG_EXECVE`: enabled debugging of every `execve()` call with arguments
  - `STEALTH_MODE=#`: controls the level of "stealthiness", see `STEALTH_MODE_*` in `internal/stealth.h`; it's 
