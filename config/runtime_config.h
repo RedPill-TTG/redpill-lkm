@@ -5,6 +5,7 @@
 
 #define MAX_NET_IFACES 8
 #define MAC_ADDR_LEN 12
+#define MAX_BLACKLISTED_CMDLINE_TOKENS 10
 
 #define VID_PID_EMPTY 0x0000
 #define VID_PID_MAX   0xFFFF
@@ -16,6 +17,7 @@ typedef unsigned short device_id;
 typedef char syno_hw[MODEL_MAX_LENGTH + 1];
 typedef char mac_address[MAC_ADDR_LEN + 1];
 typedef char serial_no[SN_MAX_LENGTH + 1];
+typedef char cmdline_token[];
 
 struct boot_media {
     device_id vid; //Vendor ID of device containing the loader.       Default: empty <valid, use first>
@@ -30,6 +32,7 @@ struct runtime_config {
     bool port_thaw; //Currently unknown.                                   Default: true  <valid>
     unsigned short netif_num; //Number of eth interfaces.                  Default: 0     <invalid>
     mac_address *macs[MAX_NET_IFACES]; //MAC addresses of eth interfaces.  Default: []    <invalid>
+    cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMDLINE_TOKENS];//    Default: []
 };
 extern struct runtime_config current_config;
 

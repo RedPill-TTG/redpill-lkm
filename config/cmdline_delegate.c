@@ -2,8 +2,6 @@
 #include "../common.h" //commonly used headers in this module
 #include "../internal/call_protected.h" //used to call cmdline_proc_show()
 
-#define CMDLINE_MAX 1024 //Max length of cmdline expected/processed; if longer a warning will be emitted
-
 /**
  * Extracts device model (syno_hw_version=<string>) from kernel cmd line
  *
@@ -254,26 +252,62 @@ static bool report_unrecognized_option(const char *param_pointer)
 
 /************************************************* End of extractors **************************************************/
 
-void extract_kernel_cmdline(struct runtime_config *config)
+long get_kernel_cmdline(char *cmdline_out, const size_t maxlen)
 {
-    char *cmdline_txt;
-    cmdline_txt = kmalloc_array(CMDLINE_MAX, sizeof(char), GFP_KERNEL);
-    if (!cmdline_txt) {
-        pr_loc_crt("Failed to reserve %lu bytes of memory", CMDLINE_MAX*sizeof(char));
-        return; //no free due to kmalloc failure
-    }
-
     struct seq_file cmdline_itr = {
-            .buf = cmdline_txt,
-            .size = CMDLINE_MAX
+            .buf = cmdline_out,
+            .size = maxlen
     };
 
-    _cmdline_proc_show(&cmdline_itr, 0);
+    int cmdline_ret = _cmdline_proc_show(&cmdline_itr, 0);
+    if (cmdline_ret != 0)
+        return cmdline_ret;
 
     pr_loc_dbg("Cmdline count: %d", (unsigned int)cmdline_itr.count);
-    pr_loc_dbg("Cmdline: %s", cmdline_txt);
     if (unlikely(cmdline_itr.count == CMDLINE_MAX)) //if the kernel line is >1K
         pr_loc_wrn("Cmdline may have been truncated to %d", CMDLINE_MAX);
+
+    return (long)cmdline_itr.count;
+}
+
+#define ADD_BLACKLIST_ENTRY(idx, token) cmdline_blacklist[idx] = kmalloc(sizeof(token), GFP_KERNEL); \
+                                        if (unlikely(!cmdline_blacklist[idx])) {                     \
+                                            pr_loc_crt("kmalloc failed");                            \
+                                            return -EFAULT;                                          \
+                                        }                                                            \
+                                        strcpy((char *)cmdline_blacklist[idx], token);               \
+                                        pr_loc_dbg("Add cmdline blacklist \"%s\" @ %d",              \
+                                                   (char *)cmdline_blacklist[idx], idx);
+int populate_cmdline_blacklist(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMDLINE_TOKENS], syno_hw *model)
+{
+    //Currently this list is static. However it's prepared to be dynamic based on the model
+    //Make sure you don't go over MAX_BLACKLISTED_CMDLINE_TOKENS (and if so adjust it)
+    ADD_BLACKLIST_ENTRY(0, CMDLINE_CT_VID);
+    ADD_BLACKLIST_ENTRY(1, CMDLINE_CT_PID);
+    ADD_BLACKLIST_ENTRY(2, CMDLINE_CT_MFG);
+    ADD_BLACKLIST_ENTRY(3, CMDLINE_KT_LOGLEVEL);
+    ADD_BLACKLIST_ENTRY(4, CMDLINE_KT_ELEVATOR);
+    ADD_BLACKLIST_ENTRY(5, CMDLINE_KT_EARLY_PK);
+    ADD_BLACKLIST_ENTRY(6, CMDLINE_KT_THAW);
+
+    return 0;
+}
+
+int extract_config_from_cmdline(struct runtime_config *config)
+{
+    char *cmdline_txt;
+    cmdline_txt = kmalloc(CMDLINE_MAX, GFP_KERNEL);
+    if (!cmdline_txt) {
+        pr_loc_crt("Failed to reserve %lu bytes of memory", CMDLINE_MAX*sizeof(char));
+        return -EFAULT; //no free due to kmalloc failure
+    }
+
+    if(get_kernel_cmdline(cmdline_txt, CMDLINE_MAX) <= 0) {
+        pr_loc_crt("Failed to extract cmdline");
+        return -EIO;
+    }
+
+    pr_loc_dbg("Cmdline: %s", cmdline_txt);
 
     /**
      * Temporary variables
@@ -281,7 +315,7 @@ void extract_kernel_cmdline(struct runtime_config *config)
     unsigned int param_counter = 0;
     char *single_param_chunk; //Pointer to the beginning of the cmdline token
 
-    while ((single_param_chunk = strsep(&cmdline_txt, "\n\t ")) != NULL ) {
+    while ((single_param_chunk = strsep(&cmdline_txt, CMDLINE_SEP)) != NULL ) {
         if (unlikely(single_param_chunk[0] == '\0')) //Skip empty params (e.g. last one)
             continue;
         pr_loc_dbg("Param #%d: |%s|", param_counter++, single_param_chunk);
@@ -298,7 +332,12 @@ void extract_kernel_cmdline(struct runtime_config *config)
         report_unrecognized_option(single_param_chunk)            ;
     }
 
+    if (populate_cmdline_blacklist(config->cmdline_blacklist, &config->hw) != 0)
+        return -EIO;
+
     pr_loc_inf("CmdLine processed successfully, tokens=%d", param_counter);
 
     kfree(cmdline_txt);
+
+    return 0;
 }

@@ -15,4 +15,9 @@
 #define STEALTH_MODE STEALTH_MODE_BASIC
 #endif
 
+struct runtime_config;
+
+int initialize_stealth(void *config);
+int uninitialize_stealth(void);
+
 #endif //REDPILLLKM_STEALTH_H

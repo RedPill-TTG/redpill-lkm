@@ -12,7 +12,8 @@ struct runtime_config current_config = {
     .mfg_mode = false,
     .port_thaw = true,
     .netif_num = 0,
-    .macs = { '\0' }
+    .macs = { '\0' },
+    .cmdline_blacklist = { '\0' }
 };
 
 static inline bool validate_hw(const syno_hw *hw) {
@@ -103,11 +104,17 @@ bool validate_runtime_config(const struct runtime_config *config)
 
 void free_runtime_config(struct runtime_config *config)
 {
-    //As of now only .macs are pointers which [potentially] will need manual freeing
-    for (unsigned short i = 0; i < MAX_NET_IFACES; i++) {
+    for (int i = 0; i < MAX_NET_IFACES; i++) {
         if (config->macs[i]) {
             pr_loc_dbg("Free MAC%d @ %p", i, config->macs[i]);
             kfree(config->macs[i]);
+        }
+    }
+
+    for (int i = 0; i < MAX_BLACKLISTED_CMDLINE_TOKENS; i++) {
+        if (config->cmdline_blacklist[i]) {
+            pr_loc_dbg("Free cmdline blacklist entry %d @ %p", i, config->cmdline_blacklist[i]);
+            kfree(config->cmdline_blacklist[i]);
         }
     }
 }

@@ -3,6 +3,9 @@
 
 #include "runtime_config.h"
 
+#define CMDLINE_MAX 1024 //Max length of cmdline expected/processed; if longer a warning will be emitted
+#define CMDLINE_SEP "\t\n "
+
 /**
  * Kernel command line tokens. For clarity keep them separated.
  *  CT = custom token
@@ -14,6 +17,12 @@
 #define CMDLINE_CT_PID "pid=" //Boot media Product ID override
 #define CMDLINE_CT_MFG "mfg" //VID & PID override will use force-reinstall VID/PID combo
 
+//Standard Linux cmdline tokens
+#define CMDLINE_KT_LOGLEVEL  "loglevel="
+#define CMDLINE_KT_ELEVATOR  "elevator="
+#define CMDLINE_KT_EARLY_PK  "earlyprintk"
+
+//Syno-specific cmdline tokens
 #define CMDLINE_KT_HW        "syno_hw_version="
 #define CMDLINE_KT_THAW      "syno_port_thaw=" //??
 #define CMDLINE_KT_SN        "sn="
@@ -25,6 +34,17 @@
 #define CMDLINE_KT_MAC3      "mac3="
 #define CMDLINE_KT_MAC4      "mac4="
 
+/**
+ * Provides an easy access to kernel cmdline
+ *
+ * Internally in the kernel code it is available as "saved_command_line". However that variable is not accessible for
+ * modules. This function populates a char buffer with the cmdline extracted using other methods.
+ *
+ * @param cmdline_out A pointer to your buffer to save the cmdline
+ * @param maxlen Your buffer space (in general you should use CMDLINE_MAX)
+ * @return cmdline length on success or -E on error
+ */
+long get_kernel_cmdline(char *cmdline_out, unsigned long maxlen);
 
 /**
  * Extracts & processes parameters from kernel cmdline
@@ -33,6 +53,6 @@
  *
  * @param config pointer to save configuration
  */
-void extract_kernel_cmdline(struct runtime_config *config);
+int extract_config_from_cmdline(struct runtime_config *config);
 
 #endif //REDPILLLKM_CMDLINE_DELEGATE_H
