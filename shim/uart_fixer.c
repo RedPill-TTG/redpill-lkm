@@ -1,4 +1,7 @@
+#define SHIM_NAME "UART fixer"
+
 #include "uart_fixer.h"
+#include "shim_base.h"
 #include "../common.h"
 #include "../config/runtime_config.h" //hw_config
 #include "../internal/call_protected.h" //early_serial_setup()
@@ -65,9 +68,9 @@ static int mute_ttyS0(void)
 
 int register_uart_fixer(const hw_config_uart_fixer *hw)
 {
-    int out = 0;
-    pr_loc_dbg("Registering UART fixer...");
+    shim_reg_in();
 
+    int out = 0;
     if (
             (hw->swap_serial && (out = uart_swap_hw_output(1, 0)) != 0) ||
             (hw->reinit_ttyS0 && (out = fix_muted_ttyS0()) != 0)
@@ -79,15 +82,15 @@ int register_uart_fixer(const hw_config_uart_fixer *hw)
 
     serial_swapped = hw->swap_serial;
 
-    pr_loc_inf("UART fixer registered");
+    shim_ureg_ok();
     return out;
 }
 
 int unregister_uart_fixer(void)
 {
-    int out = 0;
-    pr_loc_dbg("Unregistering UART fixer...");
+    shim_ureg_in();
 
+    int out = 0;
     if (
             (serial_swapped && (out = uart_swap_hw_output(0, 1)) != 0) ||
             (ttyS0_force_initted && (out = mute_ttyS0()) != 0)
@@ -96,6 +99,6 @@ int unregister_uart_fixer(void)
         return out;
     }
 
-    pr_loc_inf("UART fixer unregistered");
+    shim_ureg_ok();
     return out;
 }

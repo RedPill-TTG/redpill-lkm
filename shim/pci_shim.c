@@ -1,4 +1,7 @@
+#define SHIM_NAME "PCI devices"
+
 #include "pci_shim.h"
+#include "shim_base.h"
 #include "../common.h"
 #include "../config/runtime_config.h"
 #include "../internal/virtual_pci.h"
@@ -186,8 +189,9 @@ static int (*dev_type_handler_map[])(unsigned char bus_no, unsigned char dev_no,
 
 int register_pci_shim(const struct hw_config *hw)
 {
-    pr_loc_dbg("Creating vPCI devices for %s", hw->name);
+    shim_reg_in();
 
+    pr_loc_dbg("Creating vPCI devices for %s", hw->name);
     int out;
     for (int i = 0; i < MAX_VPCI_DEVS; i++) {
         if (hw->pci_stubs[i].type == __VPD_TERMINATOR__)
@@ -206,16 +210,16 @@ int register_pci_shim(const struct hw_config *hw)
             return out;
         }
 
-        pr_loc_dbg("vPCI device created successfully");
+        pr_loc_dbg("vPCI device %d created successfully", i+1);
     }
 
-    pr_loc_inf("PCI shim registered");
-
+    shim_reg_ok();
     return 0;
 }
 
 int unregister_pci_shim(void)
 {
+    shim_ureg_in();
     vpci_remove_all_devices_and_buses();
 
     for (int i = 0; i < free_dev_idx; i++) {
@@ -223,7 +227,6 @@ int unregister_pci_shim(void)
         kfree(devices[i]);
     }
 
-    pr_loc_inf("PCI shim unregistered (but it's buggy!)");
-
+    shim_ureg_ok();
     return -EIO; //vpci_remove_all_devices_and_buses has a bug - this is a canary to not forget
 }

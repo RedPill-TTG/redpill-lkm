@@ -1,4 +1,7 @@
+#define SHIM_NAME "PMU emulator"
+
 #include "pmu_shim.h"
+#include "shim_base.h"
 #include "../common.h"
 #include "../internal/uart/virtual_uart.h"
 #include <linux/kfifo.h> //kfifo_*
@@ -355,7 +358,7 @@ static noinline void pmu_rx_callback(int line, const char *buffer, unsigned int 
 
 int register_pmu_shim(const struct hw_config *hw)
 {
-    pr_loc_dbg("Registering PMU emulator on line=%d...", PMU_TTYS_LINE);
+    shim_reg_in();
 
     int out;
     if ((out = vuart_add_device(PMU_TTYS_LINE) != 0)) {
@@ -372,7 +375,7 @@ int register_pmu_shim(const struct hw_config *hw)
         goto error_out;
     }
 
-    pr_loc_dbg("PMU emulator registered");
+    shim_reg_ok();
     return 0;
 
     error_out:
@@ -382,20 +385,19 @@ int register_pmu_shim(const struct hw_config *hw)
 
 int unregister_pmu_shim(void)
 {
-    int out = 0;
+    shim_ureg_in();
 
+    int out = 0;
     if (unlikely(!uart_buffer)) {
         pr_loc_bug("Attempted to %s while it's not registered", __FUNCTION__);
         return 0; //Technically it succeeded
     }
-
-    pr_loc_dbg("Unregistering PMU emulator...");
 
     if ((out = vuart_remove_device(PMU_TTYS_LINE)) != 0)
         pr_loc_err("Failed to remove vUART for line=%d", PMU_TTYS_LINE);
 
     free_buffers();
 
-    pr_loc_dbg("PMU emulator unregistered");
+    shim_ureg_ok();
     return out;
 }

@@ -46,7 +46,10 @@
  *  References:
  *   - https://en.wikipedia.org/wiki/Virtual_method_table
  */
+#define SHIM_NAME "mfgBIOS"
+
 #include "bios_shim.h"
+#include "shim_base.h"
 #include "../common.h"
 #include "../internal/override_symbol.h"
 #include "../internal/call_protected.h" //kernel_has_symbol()
@@ -232,6 +235,7 @@ int register_bios_shim(const struct hw_config *hw)
 {
     int out;
     hw_config = hw;
+    shim_reg_in();
 
     if (
             (out = shim_disk_leds_ctrl(hw)) != 0 ||
@@ -241,8 +245,7 @@ int register_bios_shim(const struct hw_config *hw)
         return out;
     }
 
-    pr_loc_inf("mfgBIOS shim registered");
-
+    shim_reg_ok();
     return 0;
 }
 
@@ -250,6 +253,7 @@ int unregister_bios_shim(void)
 {
     int out;
 
+    shim_ureg_in();
     if (likely(bios_shimmed)) {
         if (!unshim_bios_module(vtable_start, vtable_end))
             return -EINVAL;
@@ -266,8 +270,8 @@ int unregister_bios_shim(void)
     unshim_disk_leds_ctrl(); //this will be noop if nothing was registered
 
     hw_config = NULL;
-    pr_loc_inf("mfgBIOS shim unregistered");
 
+    shim_ureg_ok();
     return 0;
 }
 

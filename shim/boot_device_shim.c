@@ -28,7 +28,10 @@
  * References:
  *  - See drivers/scsi/sd.c in Linux sources (especially sd_probe() method)
  */
+#define SHIM_NAME "boot device"
+
 #include "boot_device_shim.h"
+#include "shim_base.h"
 #include "../common.h"
 #include "../config/runtime_config.h"
 #include "boot_dev/usb_boot_shim.h"
@@ -39,6 +42,8 @@
 static int registered_type = BOOT_MEDIA_SHIM_NULL;
 int register_boot_shim(const struct boot_media *boot_dev_config)
 {
+    shim_reg_in();
+
     if (unlikely(registered_type != BOOT_MEDIA_SHIM_NULL)) {
         pr_loc_bug("Boot shim is already registered with type=%d", registered_type);
         return -EEXIST;
@@ -61,12 +66,15 @@ int register_boot_shim(const struct boot_media *boot_dev_config)
         return out; //individual shims should print what went wrong
 
     registered_type = boot_dev_config->type;
-    pr_loc_inf("Boot shim registered (type=%d)", registered_type);
+
+    shim_reg_ok();
     return 0;
 }
 
 int unregister_boot_shim(void)
 {
+    shim_ureg_in();
+
     int out;
     switch (registered_type) {
         case BOOT_MEDIA_USB:
@@ -86,7 +94,8 @@ int unregister_boot_shim(void)
     if (out != 0)
         return out; //individual shims should print what went wrong
 
-    pr_loc_inf("Boot shim unregistered (type=%d)", registered_type);
     registered_type = BOOT_MEDIA_SHIM_NULL;
+
+    shim_ureg_ok();
     return 0;
 }

@@ -19,7 +19,10 @@
  *  - https://0xax.gitbooks.io/linux-insides/content/SysCall/linux-syscall-4.html
  *  - https://help.ubuntu.com/community/FimwareUpgrade/Insyde
  */
+#define SHIM_NAME "firmware update blocker"
+
 #include "block_fw_update_shim.h"
+#include "shim_base.h"
 #include "../common.h"
 #include "../internal/intercept_execve.h"
 #include <linux/dmi.h> //dmi_get_system_info(), DMI_*
@@ -61,24 +64,25 @@ static void unpatch_dmi(void)
 
 int register_fw_update_shim(void)
 {
+    shim_reg_in();
+
     int out = add_blocked_execve_filename(FW_UPDATE_PATH);
     if (out != 0)
         return out;
 
     patch_dmi();
 
-    pr_loc_inf("Firmware updater blocker registered");
-
+    shim_reg_ok();
     return 0;
 }
 
 int unregister_fw_update_shim(void)
 {
-    //Do not remove execve here - it will be cleared in one sweep during unregister of interceptor
+    shim_ureg_in();
 
+    //Do not remove execve registration here - it will be cleared in one sweep during unregister of interceptor
     unpatch_dmi();
 
-    pr_loc_inf("Firmware updater blocker unregistered");
-
+    shim_ureg_ok();
     return 0;
 }
