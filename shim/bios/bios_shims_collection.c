@@ -1,4 +1,5 @@
 #include "bios_shims_collection.h"
+#include "mfgbios_types.h"
 #include "../../common.h"
 
 static unsigned long shimmed_entries[VTK_SIZE] = { '\0' };
@@ -68,14 +69,14 @@ bool shim_bios(struct module *mod, unsigned long *vtable_start, unsigned long *v
     }
 
     print_debug_symbols(vtable_start, vtable_end);
-    shim_entry(vtable_start, VTK_GET_FAN_STATUS, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_FAN_STATUS, shim_null_zero_ulong);
+    shim_entry(vtable_start, VTK_GET_FAN_STATE, shim_null_zero_ulong);
+    shim_entry(vtable_start, VTK_SET_FAN_STATE, shim_null_zero_ulong);
     shim_entry(vtable_start, VTK_SET_DISK_LED, shim_null_zero_ulong);
     shim_entry(vtable_start, VTK_SET_PWR_LED, shim_null_zero_ulong);
     shim_entry(vtable_start, VTK_SET_PWR_LED, shim_null_zero_ulong);
     shim_entry(vtable_start, VTK_SET_GPIO_PIN, shim_null_zero_ulong);
     shim_entry(vtable_start, VTK_GET_GPIO_PIN, shim_get_gpio_pin_usable);
-    shim_entry(vtable_start, 17, shim_null_zero_ulong_trace);
+    shim_entry(vtable_start, VTK_SET_GPIO_PIN_BLINK, shim_null_zero_ulong_trace);
     shim_entry(vtable_start, VTK_SET_ALR_LED, shim_null_zero_ulong);
     shim_entry(vtable_start, VTK_GET_BUZ_CLR, shim_null_zero_ulong);
     shim_entry(vtable_start, VTK_SET_BUZ_CLR, shim_null_zero_ulong);
