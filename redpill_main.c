@@ -4,7 +4,7 @@
 #include "common.h" //commonly used headers in this module
 #include "internal/intercept_execve.h" //Handling of execve() replacement
 #include "config/cmdline_delegate.h" //Parsing of kernel cmdline
-#include "shim/boot_device_shim.h" //Shimming VID/PID of boot device
+#include "shim/boot_device_shim.h" //Registering & deciding between boot device shims
 #include "shim/bios_shim.h" //Shimming various mfgBIOS functions to make them happy
 #include "shim/block_fw_update_shim.h" //Prevent firmware update from running
 #include "shim/disable_exectutables.h" //Disable common problematic executables
@@ -28,7 +28,7 @@ static int __init init_redpill(void)
             (out = extract_config_from_cmdline(&current_config)) != 0 //This MUST be the first entry
          || (out = populate_runtime_config(&current_config)) != 0 //This MUST be second
          || (out = register_uart_fixer(current_config.hw_config)) != 0 //Fix consoles ASAP
-         || (out = register_boot_shim(&current_config.boot_media, &current_config.mfg_mode)) //Make sure we're quick with this one
+         || (out = register_boot_shim(&current_config.boot_media)) //Make sure we're quick with this one
          || (out = register_execve_interceptor()) != 0 //Register this reasonably high as other modules can use it blindly
          || (out = register_bios_shim(current_config.hw_config)) != 0
          || (out = disable_common_executables()) != 0

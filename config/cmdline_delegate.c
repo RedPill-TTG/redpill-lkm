@@ -2,6 +2,9 @@
 #include "../common.h" //commonly used headers in this module
 #include "../internal/call_protected.h" //used to call cmdline_proc_show()
 
+#define ensure_cmdline_param(cmdline_param, current_param_ptr) \
+    if (strncmp(current_param_ptr, cmdline_param, sizeof_str_chunk(cmdline_param)) != 0) { return false; }
+
 /**
  * Extracts device model (syno_hw_version=<string>) from kernel cmd line
  *
@@ -38,6 +41,28 @@ static bool extract_sn(serial_no *sn, const char *param_pointer)
         pr_loc_wrn("S/N truncated to %zu", sizeof(serial_no)-1);
 
     pr_loc_dbg("S/N set to: %s", (char *)sn);
+
+    return true;
+}
+
+static bool extract_boot_media_type(struct boot_media *boot_media, const char *param_pointer)
+{
+    ensure_cmdline_param(CMDLINE_KT_SATADOM, param_pointer);
+
+    char value = param_pointer[sizeof_str_chunk(CMDLINE_KT_SATADOM)];
+    if (likely(value == '1')) {
+        boot_media->type = BOOT_MEDIA_SATA;
+        pr_loc_dbg("Boot media SATADOM requested");
+        return true;
+    }
+
+    if(value == '0') {
+        //There's no point to set that option but it's not an error
+        pr_loc_wrn("Boot media SATADOM disabled (default will be used, %s0 is a noop)", CMDLINE_KT_SATADOM);
+        return true; //setting it to 0 doesn't really make any sense but it's not an error
+    }
+
+    pr_loc_err("Option \"%s%c\" is invalid (value should be 0 or 1)", CMDLINE_KT_SATADOM, value);
 
     return true;
 }
@@ -125,7 +150,26 @@ static bool extract_mfg(bool *is_mfg_boot, const char *param_pointer)
         return false;
 
     *is_mfg_boot = true;
-    pr_loc_dbg("MFG boot enabled");
+    pr_loc_dbg("MFG boot requested");
+
+    return true;
+}
+
+/**
+ * Extracts maximum size of SATA DOM (dom_szmax=<number of MiB>) from kernel cmd line
+ */
+static bool extract_dom_max_size(struct boot_media *boot_media, const char *param_pointer)
+{
+    ensure_cmdline_param(CMDLINE_CT_DOM_SZMAX, param_pointer);
+
+    long size_mib = simple_strtol(param_pointer + sizeof_str_chunk(CMDLINE_KT_NETIF_NUM), NULL, 10);
+    if (size_mib <= 0) {
+        pr_loc_err("Invalid maximum size of SATA DoM (\"%s=%ld\")", CMDLINE_KT_NETIF_NUM, size_mib);
+        return true;
+    }
+
+    boot_media->dom_size_mib = size_mib;
+    pr_loc_dbg("Set maximum SATA DoM to %ld", size_mib);
 
     return true;
 }
@@ -296,7 +340,7 @@ int populate_cmdline_blacklist(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_
 int extract_config_from_cmdline(struct runtime_config *config)
 {
     char *cmdline_txt;
-    cmdline_txt = kmalloc(CMDLINE_MAX, GFP_KERNEL);
+    cmdline_txt = kzalloc(CMDLINE_MAX, GFP_KERNEL); //we want our struct to be empty
     if (!cmdline_txt) {
         pr_loc_crt("Failed to reserve %lu bytes of memory", CMDLINE_MAX*sizeof(char));
         return -EFAULT; //no free due to kmalloc failure
@@ -321,15 +365,17 @@ int extract_config_from_cmdline(struct runtime_config *config)
         pr_loc_dbg("Param #%d: |%s|", param_counter++, single_param_chunk);
 
         //Stop after the first one matches
-        extract_hw(&config->hw, single_param_chunk)               ||
-        extract_sn(&config->sn, single_param_chunk)               ||
-        extract_vid(&config->boot_media.vid, single_param_chunk)  ||
-        extract_pid(&config->boot_media.pid, single_param_chunk)  ||
-        extract_mfg(&config->mfg_mode, single_param_chunk)        ||
-        extract_port_thaw(&config->port_thaw, single_param_chunk) ||
-        extract_netif_num(&config->netif_num, single_param_chunk) ||
-        extract_netif_macs(config->macs, single_param_chunk)      ||
-        report_unrecognized_option(single_param_chunk)            ;
+        extract_hw(&config->hw, single_param_chunk)                      ||
+        extract_sn(&config->sn, single_param_chunk)                      ||
+        extract_boot_media_type(&config->boot_media, single_param_chunk) ||
+        extract_vid(&config->boot_media.vid, single_param_chunk)         ||
+        extract_pid(&config->boot_media.pid, single_param_chunk)         ||
+        extract_dom_max_size(&config->boot_media, single_param_chunk)    ||
+        extract_mfg(&config->boot_media.mfg_mode, single_param_chunk)    ||
+        extract_port_thaw(&config->port_thaw, single_param_chunk)        ||
+        extract_netif_num(&config->netif_num, single_param_chunk)        ||
+        extract_netif_macs(config->macs, single_param_chunk)             ||
+        report_unrecognized_option(single_param_chunk)                   ;
     }
 
     if (populate_cmdline_blacklist(config->cmdline_blacklist, &config->hw) != 0)

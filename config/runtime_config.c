@@ -8,10 +8,12 @@ struct runtime_config current_config = {
     .hw = { '\0' },
     .sn = { '\0' },
     .boot_media = {
+        .type = BOOT_MEDIA_USB,
+        .mfg_mode = false,
         .vid = VID_PID_EMPTY,
-        .pid = VID_PID_EMPTY
+        .pid = VID_PID_EMPTY,
+        .dom_size_mib = 1024, //usually the image will be used with ESXi and thus it will be ~100MB anyway
     },
-    .mfg_mode = false,
     .port_thaw = true,
     .netif_num = 0,
     .macs = { '\0' },
@@ -30,21 +32,49 @@ static inline bool validate_sn(const serial_no *sn) {
     return true;
 }
 
-static inline bool validate_vid_pid(const struct boot_media *boot)
+static inline bool validate_boot_dev(const struct boot_media *boot)
 {
-    if (boot->vid == VID_PID_EMPTY && boot->pid == VID_PID_EMPTY) {
-        pr_loc_wrn("Empty/no \"%s\" and \"%s\" specified - first USB storage device will be used", CMDLINE_CT_VID,
-                   CMDLINE_CT_PID);
-        return true; //this isn't necessarily an error (e.g. running under a VM with only a single USB port)
+    if (likely(boot->type == BOOT_MEDIA_USB)) {
+        if (boot->vid == VID_PID_EMPTY && boot->pid == VID_PID_EMPTY) {
+            pr_loc_wrn("Empty/no \"%s\" and \"%s\" specified - first USB storage device will be used", CMDLINE_CT_VID,
+                       CMDLINE_CT_PID);
+            return true; //this isn't necessarily an error (e.g. running under a VM with only a single USB port)
+        }
+
+        if (boot->vid == VID_PID_EMPTY) { //PID=0 is valid, but the VID is not
+            pr_loc_err("Empty/no \"%s\" specified", CMDLINE_CT_VID);
+            return false;
+        }
+
+        pr_loc_dbg("Configured boot device type to USB");
+        return true;
+        //not checking for >VID_PID_MAX as vid type is already ushort
     }
 
-    if (boot->vid == VID_PID_EMPTY) { //PID=0 is valid, but the VID is not
-        pr_loc_err("Empty/no \"%s\" specified", CMDLINE_CT_VID);
+    if (boot->type == BOOT_MEDIA_SATA) {
+#ifndef NATIVE_SATA_DOM_SUPPORTED
+        pr_loc_err("Kernel you are running was built without SATA DoM support, you cannot use %s", CMDLINE_KT_SATADOM);
         return false;
+#endif
+
+        if (boot->vid != VID_PID_EMPTY || boot->pid != VID_PID_EMPTY)
+            pr_loc_wrn("Using SATA-DoM boot - %s and %s parameter values will be ignored",
+                       CMDLINE_CT_VID, CMDLINE_CT_PID);
+
+        //this config is impossible as there's no equivalent for force-reinstall boot on SATA, so it's better to detect
+        //that rather than causing WTFs for someone who falsely assuming that it's possible
+        if (boot->mfg_mode) {
+            pr_loc_err("You cannot combine %s=1 with %s - the OS supports force-reinstall on USB only",
+                       CMDLINE_KT_SATADOM, CMDLINE_CT_MFG);
+            return false;
+        }
+
+        pr_loc_dbg("Configured boot device type to SATA");
+        return true;
     }
 
-    return true;
-    //not checking for >VID_PID_MAX as vid type is already ushort
+    pr_loc_bug("Got unknown boot type - did you forget to update %s?", __FUNCTION__);
+    return false;
 }
 
 static inline bool validate_nets(const unsigned short if_num, mac_address *macs[MAX_NET_IFACES])
@@ -134,7 +164,7 @@ static bool validate_runtime_config(const struct runtime_config *config)
     bool valid = true;
 
     valid &= validate_sn(&config->sn);
-    valid &= validate_vid_pid(&config->boot_media);
+    valid &= validate_boot_dev(&config->boot_media);
     valid &= validate_nets(config->netif_num, config->macs);
     valid &= validate_platform_config(config->hw_config);
 

@@ -16,6 +16,8 @@
 #define CMDLINE_CT_VID "vid=" //Boot media Vendor ID override
 #define CMDLINE_CT_PID "pid=" //Boot media Product ID override
 #define CMDLINE_CT_MFG "mfg" //VID & PID override will use force-reinstall VID/PID combo
+#define CMDLINE_CT_MFG "mfg" //VID & PID override will use force-reinstall VID/PID combo
+#define CMDLINE_CT_DOM_SZMAX "dom_szmax=" //Max size of SATA device (MiB) to be considered a DOM (usually you should NOT use this)
 
 //Standard Linux cmdline tokens
 #define CMDLINE_KT_LOGLEVEL  "loglevel="
@@ -25,6 +27,7 @@
 //Syno-specific cmdline tokens
 #define CMDLINE_KT_HW        "syno_hw_version="
 #define CMDLINE_KT_THAW      "syno_port_thaw=" //??
+#define CMDLINE_KT_SATADOM   "synoboot_satadom=" //0|1 - whether to use SATA Disk-on-Module for boot drive
 #define CMDLINE_KT_SN        "sn="
 #define CMDLINE_KT_NETIF_NUM "netif_num="
 #define CMDLINE_KT_MACS      "macs="

@@ -33,8 +33,4 @@
 #define SERIAL8250_LAST_ISA_LINE (UART_NR-1) //max valid index of ttyS
 #define SERIAL8250_SOFT_IRQ 0 //a special IRQ value which, if set on a port, will force 8250 driver to use timers
 
-#ifdef CONFIG_SYNO_X86_SERIAL_PORT_SWAP
-#define UART_BUG_SWAPPED //indicates that first two UARTs are swapped (sic!). Yes, we do consider it a fucking bug.
-#endif
-
 #endif //REDPILL_UART_DEFS_H

@@ -4,17 +4,28 @@
 #include <linux/types.h> //bool
 #include "../shim/pci_shim.h" //pci_shim_device_type
 
+//These below are currently known runtime limitations
 #define MAX_NET_IFACES 8
 #define MAC_ADDR_LEN 12
 #define MAX_BLACKLISTED_CMDLINE_TOKENS 10
+
+#ifdef CONFIG_SYNO_X86_SERIAL_PORT_SWAP
+#define UART_BUG_SWAPPED //indicates that first two UARTs are swapped (sic!). Yes, we do consider it a fucking bug.
+#endif
+
+#ifdef CONFIG_SYNO_BOOT_SATA_DOM
+#define NATIVE_SATA_DOM_SUPPORTED //whether SCSI sd.c driver supports native SATA DOM
+#endif
+
+
+//Defines below are experimentally determined to be sufficient but can often be changed
 #define MAX_VPCI_BUSES 8 //adjust if needed, max 256
 #define MAX_VPCI_DEVS 16 //adjust if needed, max 256*32=8192
+#define MODEL_MAX_LENGTH 10
+#define SN_MAX_LENGTH 13
 
 #define VID_PID_EMPTY 0x0000
 #define VID_PID_MAX   0xFFFF
-
-#define MODEL_MAX_LENGTH 10
-#define SN_MAX_LENGTH 13
 
 typedef unsigned short device_id;
 typedef char syno_hw[MODEL_MAX_LENGTH + 1];
@@ -22,9 +33,21 @@ typedef char mac_address[MAC_ADDR_LEN + 1];
 typedef char serial_no[SN_MAX_LENGTH + 1];
 typedef char cmdline_token[];
 
+enum boot_media_type {
+    BOOT_MEDIA_USB,
+    BOOT_MEDIA_SATA
+};
+
 struct boot_media {
+    enum boot_media_type type; //                                     Default: BOOT_MEDIA_USB <valid>
+
+    //USB only options
+    bool mfg_mode; //emulate mfg mode (valid for USB boot only).      Default: false <valid>
     device_id vid; //Vendor ID of device containing the loader.       Default: empty <valid, use first>
     device_id pid; //Product ID of device containing the loader.      Default: empty <valid, use first>
+
+    //SATA only options
+    unsigned long dom_size_mib; //Max size of SATA DOM                Default: 1024 <valid, READ sata_boot_shim.c!!!>
 };
 
 struct vpci_device_stub {
@@ -50,7 +73,6 @@ struct runtime_config {
     syno_hw hw; //used to determine quirks.                                Default: empty <invalid>
     serial_no sn; //Used to validate it and warn the user.                 Default: empty <invalid>
     struct boot_media boot_media;
-    bool mfg_mode; //emulate mfg mode.                                     Default: false <valid>
     bool port_thaw; //Currently unknown.                                   Default: true  <valid>
     unsigned short netif_num; //Number of eth interfaces.                  Default: 0     <invalid>
     mac_address *macs[MAX_NET_IFACES]; //MAC addresses of eth interfaces.  Default: []    <invalid>

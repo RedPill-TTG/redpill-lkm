@@ -78,6 +78,12 @@ DEFINE_UNEXPORTED_SHIM(int, do_execve, CP_LIST(struct filename *filename,
 DEFINE_UNEXPORTED_SHIM(struct filename *, getname, CP_LIST(const char __user * filename), CP_LIST(filename), ERR_PTR(-EFAULT));
 #endif
 
+#ifdef CONFIG_SYNO_BOOT_SATA_DOM
+DEFINE_UNEXPORTED_SHIM(int, read_capacity_10, CP_LIST(struct scsi_disk *sdkp, struct scsi_device *sdp, unsigned char *buffer), CP_LIST(sdkp, sdp, buffer), -EIO);
+DEFINE_UNEXPORTED_SHIM(int, read_capacity_16, CP_LIST(struct scsi_disk *sdkp, struct scsi_device *sdp, unsigned char *buffer), CP_LIST(sdkp, sdp, buffer), -EIO);
+DEFINE_UNEXPORTED_SHIM(int, scsi_scan_host_selected, CP_LIST(struct Scsi_Host *shost, unsigned int channel, unsigned int id, u64 lun, int rescan), CP_LIST(shost, channel, id, lun, rescan), -EIO);
+#endif
+
 DEFINE_UNEXPORTED_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port), port, -EIO);
 DEFINE_UNEXPORTED_SHIM(int, update_console_cmdline, CP_LIST(char *name, int idx, char *name_new, int idx_new, char *options), CP_LIST(name, idx, name_new, idx_new, options), -EIO);
 
