@@ -112,7 +112,7 @@ bool unshim_bios(unsigned long *vtable_start, unsigned long *vtable_end)
     return true;
 }
 
-bool clean_shims_history(void)
+void clean_shims_history(void)
 {
-    memset(shimmed_entries, sizeof(shimmed_entries));
+    memset(shimmed_entries, 0, sizeof(shimmed_entries));
 }
