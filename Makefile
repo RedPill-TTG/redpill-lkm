@@ -36,7 +36,7 @@ ccflags-y += -std=gnu99 -fgnu89-inline -Wno-declaration-after-statement
 ccflags-y += -I$(src)/compat/toolkit/include
 
 ifndef RP_VERSION_POSTFIX
-RP_VERSION_POSTFIX := $(shell git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null && echo -n "git-" && git log -1 --pretty='%h' 2>/dev/null || echo "???")
+RP_VERSION_POSTFIX := $(shell git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null && echo -n "git-" && git log -1 --pretty='%h' 2>/dev/null || date '+at-%Y_%m_%d-%H_%M_%S')
 endif
 ccflags-y += -DRP_VERSION_POSTFIX="\"$(RP_VERSION_POSTFIX)\""
 
