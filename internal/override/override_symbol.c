@@ -100,13 +100,13 @@ static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
     "\xff\xe0" /* JMP *%rax */
 ;
 
-#define WITH_OVS_LOCK(__sym, code)                                     \
-    do {                                                               \
-        pr_loc_dbg("Obtaining lock for <%p>", (__sym)->org_sym_ptr);   \
-        spin_lock_irqsave(&(__sym)->lock, (__sym)->lock_irq);          \
-        ({code});                                                      \
-        spin_unlock_irqrestore(&(__sym)->lock, (__sym)->lock_irq);     \
-        pr_loc_dbg("Released lock for <%p>", (__sym)->org_sym_ptr);    \
+#define WITH_OVS_LOCK(__sym, code)                                                               \
+    do {                                                                                         \
+        pr_loc_dbg("Obtaining lock for <%pF/%p>", (__sym)->org_sym_ptr, (__sym)->org_sym_ptr);   \
+        spin_lock_irqsave(&(__sym)->lock, (__sym)->lock_irq);                                    \
+        ({code});                                                                                \
+        spin_unlock_irqrestore(&(__sym)->lock, (__sym)->lock_irq);                               \
+        pr_loc_dbg("Released lock for <%p>", (__sym)->org_sym_ptr);                              \
     } while(0)
 
 struct override_symbol_inst {
@@ -201,19 +201,18 @@ static inline void prepare_trampoline(struct override_symbol_inst *sym)
  */
 int __enable_symbol_override(struct override_symbol_inst *sym)
 {
-    if (unlikely(sym->installed))
-        return 0; //noop but not an error
-
-    if (!sym->has_trampoline)
-        prepare_trampoline(sym);
-
-    if (sym->mem_protected)
-        set_symbol_rw(sym);
-
     WITH_OVS_LOCK(sym,
-        pr_loc_dbg("Writing trampoline code to <%p>", sym->org_sym_ptr);
-        memcpy(sym->org_sym_ptr, sym->trampoline, OVERRIDE_JUMP_SIZE);
-        sym->installed = true;
+         if (likely(!sym->installed)) {
+            if (!sym->has_trampoline)
+                prepare_trampoline(sym);
+
+            if (sym->mem_protected)
+                set_symbol_rw(sym);
+
+            pr_loc_dbg("Writing trampoline code to <%p>", sym->org_sym_ptr);
+            memcpy(sym->org_sym_ptr, sym->trampoline, OVERRIDE_JUMP_SIZE);
+            sym->installed = true;
+        }
     );
 
     return 0;
@@ -229,16 +228,15 @@ int __enable_symbol_override(struct override_symbol_inst *sym)
  */
 int __disable_symbol_override(struct override_symbol_inst *sym)
 {
-    if (unlikely(!sym->installed))
-        return 0; //noop but not an error
-
-    if (sym->mem_protected)
-        set_symbol_rw(sym);
-
     WITH_OVS_LOCK(sym,
-        pr_loc_dbg("Writing original code to <%p>", sym->org_sym_ptr);
-        memcpy(sym->org_sym_ptr, sym->org_sym_code, OVERRIDE_JUMP_SIZE);
-        sym->installed = false;
+        if (likely(sym->installed)) {
+            if (sym->mem_protected)
+                set_symbol_rw(sym);
+
+            pr_loc_dbg("Writing original code to <%p>", sym->org_sym_ptr);
+            memcpy(sym->org_sym_ptr, sym->org_sym_code, OVERRIDE_JUMP_SIZE);
+            sym->installed = false;
+        }
     );
 
     return 0;
