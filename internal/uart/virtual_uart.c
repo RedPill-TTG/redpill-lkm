@@ -66,8 +66,8 @@
 #include "vuart_internal.h"
 #include "../../common.h" //can set VUART_DEBUG_LOG and others
 #include "../../debug/debug_vuart.h" //it will provide normal or nooped versions of macros; CHECKS VUART_DEBUG_LOG
-#include "../../common.h"
 #include "../../config/uart_defs.h" //COM defs & struct uart_port
+#include "../../internal/intercept_driver_register.h" //is_driver_registered, watch_driver_register, unwatch_driver_register
 #include "vuart_virtual_irq.h" //vIRQ handling & shimming; CHECKS VUART_USE_TIMER_FALLBACK
 #include <linux/serial_8250.h> //serial8250_unregister_port, uart_8250_port
 #include <linux/serial_reg.h> //UART_* consts
@@ -82,6 +82,7 @@
 #define UART_IIR_FIFOEN 0xc0
 #define UART_IIR_FIFEN_B6 0x40
 #define UART_IIR_FIFEN_B7 0x80
+#define UART_DRIVER_NAME "serial8250" //see drivers/tty/serial/8250/8250_core.c in "serial8250_isa_driver"
 
 /**
  * Static definition of all possible UARTs in the system supported by 8250 driver
@@ -120,6 +121,7 @@ struct flush_callback {
 };
 //Storage for all TX callbacks, see vuart_set_tx_callback()
 static struct flush_callback *flush_cbs[SERIAL8250_LAST_ISA_LINE] = { NULL };
+static volatile bool kernel_driver_ready = false; //Whether the 8250 UART driver is ready
 
 /**************************************** Internal helper function-like macros ****************************************/
 //Get vDEV from line/ttyS number (created for consistency)
@@ -636,6 +638,12 @@ static void serial_remote_write(struct uart_port *port, int offset, int value)
     unlock_vuart(vdev);
 }
 
+
+/************************************************** vUART Glue Layer **************************************************/
+static driver_watcher_instance *driver_watcher = NULL;
+static int update_serial8250_isa_port(struct serial8250_16550A_vdev *vdev);
+static int restore_serial8250_isa_port(struct serial8250_16550A_vdev *vdev);
+
 /**
  * Initializes/allocates what's needed in a fresh vdev structure (or one which was previously freed)
  */
@@ -692,6 +700,106 @@ static int deinitialize_ttyS(struct serial8250_16550A_vdev *vdev)
 }
 
 /**
+ * Watches for the serial8250 driver to load in order to register ports which were added before the driver loaded
+ */
+static driver_watch_notify_result serial8250_ready_watcher(struct device_driver *drv, driver_watch_notify_state event)
+{
+    if (unlikely(event != DWATCH_STATE_LIVE))
+        return DWATCH_NOTIFY_CONTINUE;
+
+    pr_loc_dbg("%s driver loaded - adding queued ports", UART_DRIVER_NAME);
+    kernel_driver_ready = true;
+
+    int out;
+    for_each_vdev() {
+        //non-initialized ports are these which were never added as vUARTs
+        if (!ttySs[line].initialized || ttySs[line].registered)
+            continue;
+
+        pr_loc_dbg("Processing enqueued port %d", line);
+        if ((out = update_serial8250_isa_port(&ttySs[line])) != 0) {
+            //This is critical as ports were promised to be registered to other parts of the application but we cannot
+            // fulfill that promise now
+            pr_loc_crt("Failed to process port %d - error=%d", line, out);
+        }
+    }
+
+    pr_loc_dbg("Finished processing enqueued ports");
+    return DWATCH_NOTIFY_DONE;
+}
+
+/**
+ * Checks the current serial8250 status
+ *
+ * @return 0 if not loaded, 1 if loaded, -E on error
+ */
+static int probe_driver(void)
+{
+    if (kernel_driver_ready)
+        return 1; //we've already checked the state and confirmed as ready before
+
+    int driver_ready_tristate = is_driver_registered(UART_DRIVER_NAME, NULL);
+    if (driver_ready_tristate < 0) {
+        pr_loc_err("Failed to check %s driver state - error=%d", UART_DRIVER_NAME, driver_ready_tristate);
+        return -EIO;
+    }
+
+    if (driver_ready_tristate == 1)
+        kernel_driver_ready = true;
+
+    return driver_ready_tristate;
+}
+
+/**
+ * Attempt to watch for the serial8250 driver readiness (if needed)
+ *
+ * @return 0 if driver is not loaded and a watcher has been set up,
+ *         1 if driver is already loaded (and nothing needs to be done),
+ *         -E on error
+ */
+static int try_wait_for_serial8250_driver(void)
+{
+    int driver_ready_tristate = probe_driver();
+    if (driver_ready_tristate != 0)
+        return driver_ready_tristate; //if the driver is ready (=1) or an error occurred (-E) we don't do anything here
+
+    pr_loc_inf("%s driver is not ready - the port addition will be delayed until the driver loads", UART_DRIVER_NAME);
+    driver_watcher = watch_driver_register(UART_DRIVER_NAME, serial8250_ready_watcher, DWATCH_STATE_LIVE);
+
+    if (IS_ERR(driver_watcher)) {
+        pr_loc_err("Failed to register driver watcher - no ports can be registered till the driver loads");
+        return PTR_ERR(driver_watcher);
+    }
+
+    return 0;
+}
+
+/**
+ * Disable the driver watcher if it was set up
+ *
+ * @return 0 on success, -E on error
+ */
+static int try_leave_serial8250_driver(void)
+{
+    if (!driver_watcher) //we're only concerned about watching the driver
+        return 0;
+
+    for_each_vdev() {
+        if (ttySs[line].initialized && !ttySs[line].registered) {
+            pr_loc_dbg("Cannot leave %s driver yet - port %d is still awaiting registration", UART_DRIVER_NAME, line);
+            return 0;
+        }
+    }
+
+    int out = unwatch_driver_register(driver_watcher);
+    driver_watcher = NULL;
+    if (out != 0)
+        pr_loc_err("Failed to unwatch driver (error=%d)", out);
+
+    return out;
+}
+
+/**
  * Asks the Linux 8250 driver to UPDATE properties of a given serial device which matches line & iobase
  *
  * The reason why this function is called update_ rather than add_ is that we're NOT adding anything new to the driver.
@@ -702,6 +810,24 @@ static int update_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
 {
     int out;
     pr_loc_dbg("Registering ttyS%d (io=0x%x) in the driver", vdev->line, vdev->iobase);
+
+    if (unlikely(vdev->registered)) {
+        pr_loc_bug("Port ttyS%d (io=0x%x) is already registered in the driver", vdev->line, vdev->iobase);
+        return -EEXIST;
+    }
+
+    int driver_ready_tristate = try_wait_for_serial8250_driver();
+    if (driver_ready_tristate == 0) {
+        pr_loc_wrn("The %s driver is not ready - vUART port ttyS%d (io=0x%x) will be activated later", UART_DRIVER_NAME,
+                   vdev->line, vdev->iobase);
+        return 0;
+    }
+
+    if (driver_ready_tristate < 0) {
+        pr_loc_err("%s failed due to underlining driver error", __FUNCTION__);
+        return driver_ready_tristate;
+    }
+
 
     struct uart_8250_port *up = kzalloc(sizeof(struct uart_8250_port), GFP_KERNEL);
     struct uart_port *port = &up->port;
@@ -737,6 +863,7 @@ static int update_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
     }
     pr_loc_dbg("ttyS%d registered with driver (line=%d)", vdev->line, out);
     out = 0; //serial8250_register_8250_port return serial port line # or -E code
+    vdev->registered = true;
 
     out_free:
     kfree(up);
@@ -750,6 +877,17 @@ static int restore_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
 {
     int out;
     pr_loc_dbg("Unregistering ttyS%d (io=0x%x) from the driver", vdev->line, vdev->iobase);
+
+    if (unlikely(!vdev->registered)) {
+        pr_loc_dbg("Port ttyS%d (io=0x%x) is not registered in the driver - nothing to restore", vdev->line,
+                   vdev->iobase);
+        return 0;
+    }
+
+    if (unlikely(!kernel_driver_ready)) {
+        pr_loc_wrn("Port ttyS%d (io=0x%x) cannot be restored - kernel driver not ready", vdev->line, vdev->iobase);
+        return 0; //not an error as technically the port is NOT in the driver
+    }
 
     struct uart_8250_port *up = kzalloc(sizeof(struct uart_8250_port), GFP_KERNEL);
     struct uart_port *port = &up->port;
@@ -772,6 +910,9 @@ static int restore_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
     }
     pr_loc_dbg("ttyS%d finished unregistraton from driver (line=%d)", vdev->line, out);
     out = 0; //serial8250_register_8250_port return serial port line # or -E code
+
+    vdev->registered = false;
+    out = try_leave_serial8250_driver();
 
     out_free:
     kfree(up);
@@ -833,8 +974,13 @@ int vuart_inject_rx(int line, const char *buffer, int length)
     
     struct serial8250_16550A_vdev *vdev = get_line_vdev(line);
     if (unlikely(!vdev->initialized)) {
-        pr_loc_bug("Cannot inject data into non-initialized device");
+        pr_loc_bug("Cannot inject data into non-initialized or non-registered device");
         return -ENXIO;
+    }
+
+    if (unlikely(!vdev->registered)) {
+        pr_loc_wrn("Cannot inject data into unregistered device"); //...as it will be removed by the driver on reg
+        return 0;
     }
 
     //No space to put data - not an error per-sen as this can be re-run again
@@ -861,7 +1007,7 @@ int vuart_add_device(int line)
 
     int out;
     struct serial8250_16550A_vdev *vdev = get_line_vdev(line);
-    
+
     if ((out = initialize_ttyS(vdev)) != 0)
         return out;
 

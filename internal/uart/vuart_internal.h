@@ -59,6 +59,7 @@ struct serial8250_16550A_vdev {
 
     //Some operations (e.g. FIFO access) must be locked
     bool initialized:1;
+    bool registered:1; //whether the vdev is actually registered with 8250 subsystem
     spinlock_t *lock;
     unsigned long lock_flags;
 
