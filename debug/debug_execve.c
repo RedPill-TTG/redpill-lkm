@@ -85,7 +85,7 @@ static int count_args(struct user_arg_ptr argv)
     return i;
 }
 
-void RPDBG_print_execve_call(const char __user *filename, const char __user *const __user *argv)
+void RPDBG_print_execve_call(const char *filename, const char __user *const __user *argv)
 {
     struct task_struct *caller = get_cpu_var(current_task);
 
@@ -106,7 +106,7 @@ void RPDBG_print_execve_call(const char __user *filename, const char __user *con
         ++arg_ptr;
     }
 
-    pr_loc_dbg("%s@%d: %s[%d]=>%s<%i> %s", __FUNCTION__, caller->on_cpu, caller->comm, caller->pid, filename, argc,
+    pr_loc_dbg("execve@cpu%d: %s[%d]=>%s<%i> {%s}", caller->on_cpu, caller->comm, caller->pid, filename, argc,
                arg_str);
 
     kfree(arg_str);

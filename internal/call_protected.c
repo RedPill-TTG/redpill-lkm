@@ -70,12 +70,22 @@ DEFINE_UNEXPORTED_SHIM(int, set_memory_ro, CP_LIST(unsigned long addr, int numpa
 DEFINE_UNEXPORTED_SHIM(int, set_memory_rw, CP_LIST(unsigned long addr, int numpages), CP_LIST(addr, numpages), -EFAULT);
 #endif
 
-//We only need these for intercept_execve() on newer kernels
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
+//See header file for detailed explanation what's going on here as it's more complex than a single commit
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+DEFINE_UNEXPORTED_SHIM(int, do_execve, CP_LIST(const char *filename,
+        const char __user *const __user *__argv,
+        const char __user *const __user *__envp), CP_LIST(filename, __argv, __envp), -EINTR);
+
+#ifndef CONFIG_AUDITSYSCALL
+DEFINE_UNEXPORTED_SHIM(void, final_putname, CP_LIST(struct filename *name), CP_LIST(name), __VOID_RETURN__);
+#else
+DEFINE_UNEXPORTED_SHIM(void, putname, CP_LIST(struct filename *name), CP_LIST(name), __VOID_RETURN__);
+#endif
+#else
 DEFINE_UNEXPORTED_SHIM(int, do_execve, CP_LIST(struct filename *filename,
         const char __user *const __user *__argv,
         const char __user *const __user *__envp), CP_LIST(filename, __argv, __envp), -EINTR);
-DEFINE_UNEXPORTED_SHIM(struct filename *, getname, CP_LIST(const char __user * filename), CP_LIST(filename), ERR_PTR(-EFAULT));
+DEFINE_UNEXPORTED_SHIM(struct filename *, getname, CP_LIST(const char __user *name), CP_LIST(name), ERR_PTR(-EFAULT));
 #endif
 
 #ifdef CONFIG_SYNO_BOOT_SATA_DOM

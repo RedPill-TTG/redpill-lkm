@@ -20,13 +20,11 @@
  */
 #include "intercept_execve.h"
 #include "../common.h"
+#include <asm/unistd_64.h> //syscalls numbers
+#include <linux/limits.h>
+#include <linux/fs.h> //struct filename
 #include "override_symbol.h" //override_syscall()
-#include <generated/uapi/asm/unistd_64.h> //syscalls numbers
-#include <uapi/linux/limits.h>
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
-#include "call_protected.h" //do_execve() & getname()
-#endif
+#include "call_protected.h" //do_execve(), getname(), putname()
 
 #ifdef RPDBG_EXECVE
 #include "../debug/debug_execve.h"
@@ -36,7 +34,7 @@
 
 static char * intercepted_filenames[MAX_INTERCEPTED_FILES] = { NULL };
 
-int add_blocked_execve_filename(const char * filename)
+int add_blocked_execve_filename(const char *filename)
 {
     if (unlikely(strlen(filename) > PATH_MAX))
         return -ENAMETOOLONG;
@@ -75,27 +73,37 @@ static asmlinkage long shim_sys_execve(const char __user *filename,
                                        const char __user *const __user *argv,
                                        const char __user *const __user *envp)
 {
+
+    struct filename *path = _getname(filename);
+    //this is essentially what do_execve() (or SYSCALL_DEFINE3 on older kernels) will do if the getname ptr is invalid
+    if (IS_ERR(path))
+        return PTR_ERR(path);
+
+    const char *pathname = path->name;
 #ifdef RPDBG_EXECVE
-    RPDBG_print_execve_call(filename, argv);
+    RPDBG_print_execve_call(pathname, argv);
 #endif
 
     for (int i = 0; i < MAX_INTERCEPTED_FILES; i++) {
         if (!intercepted_filenames[i])
             break;
 
-        if (unlikely(strcmp(filename, intercepted_filenames[i]) == 0)) {
-            pr_loc_inf("Blocked %s from running", filename);
+        if (unlikely(strcmp(pathname, intercepted_filenames[i]) == 0)) {
+            pr_loc_inf("Blocked %s from running", pathname);
             //We cannot just return 0 here - execve() *does NOT* return on success, but replaces the current process ctx
             do_exit(0);
         }
     }
 
-//On newer kernels the stub will break the stack. Calling do_execve() directly goes around the problem.
-//A proper solution would be a custom ASM stub but this is complex & fragile: https://my.oschina.net/macwe/blog/603583
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,18,0)
-    return org_sys_execve(filename, argv, envp);
+//Depending on the version of the kernel do_execve() accepts bare filename (old) or the full struct filename (newer)
+//Additionally in older kernels we need to take care of the path lifetime and put it back (it's automatic in newer)
+//See: https://github.com/torvalds/linux/commit/c4ad8f98bef77c7356aa6a9ad9188a6acc6b849d
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
+    int out = _do_execve(pathname, argv, envp);
+    _putname(path);
+    return out;
 #else
-    return _do_execve(_getname(filename), argv, envp);
+    return _do_execve(path, argv, envp);
 #endif
 }
 

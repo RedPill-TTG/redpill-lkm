@@ -14,6 +14,9 @@ add_definitions(-DCONFIG_SYNO_X86_SERIAL_PORT_SWAP)
 #include_directories(./linux-4.4.x-apollolake-25426/include)
 #include_directories(./linux-4.4.x-apollolake-25426/arch/x86/include)
 
+# Custom options in our makefile
+add_definitions(-DDBG_EXECVE)
+
 # Generic options
 add_definitions(-D__KERNEL__)
 add_definitions(-DMODULE)

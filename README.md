@@ -47,7 +47,7 @@ The procedure to build with the toolkit is **not recommended**. However, some ve
 
 ## Additional make options
 While calling `make` you can also add these additional modifiers (e.g. `make FOO BAR`):
- - `DBG_EXECVE`: enabled debugging of every `execve()` call with arguments
+ - `DBG_EXECVE=y`: enabled debugging of every `execve()` call with arguments
  - `STEALTH_MODE=#`: controls the level of "stealthiness", see `STEALTH_MODE_*` in `internal/stealth.h`; it's 
    `STEALTH_MODE_BASIC` by default
  - `LINUX_SRC=...`: path to the linux kernel sources (`./linux-3.10.x-bromolow-25426` by default)
