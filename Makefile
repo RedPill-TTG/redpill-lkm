@@ -1,8 +1,9 @@
 LINUX_SRC := "./linux-3.10.x-bromolow-25426"
 PWD   := $(shell pwd)
-SRCS   = internal/call_protected.c internal/override_symbol.c internal/stealth.c \
+SRCS   = internal/override_symbol.c internal/intercept_execve.c internal/call_protected.c internal/stealth.c \
 		 config/cmdline_delegate.c config/runtime_config.c \
 		 shim/boot_device_shim.c shim/bios/bios_shims_collection.c shim/bios_shim.c shim/block_fw_update_shim.c \
+		  shim/disable_exectutables.c \
 	     redpill_main.c
 OBJS   = $(SRCS:.c=.o)
 #this module name CAN NEVER be the same as the main file (or it will get weird ;)) and the main file has to be included

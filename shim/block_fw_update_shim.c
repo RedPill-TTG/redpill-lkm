@@ -21,34 +21,12 @@
  */
 #include "block_fw_update_shim.h"
 #include "../common.h"
-#include "../internal/override_symbol.h" //override_syscall()
-#include <generated/uapi/asm/unistd_64.h> //syscalls numbers
+#include "../internal/intercept_execve.h"
 #include <linux/dmi.h> //dmi_get_system_info(), DMI_*
 
 #define DMI_MAX_LEN 512
 #define FW_BOARD_NAME "\x53\x79\x6e\x6f\x64\x65\x6e"
 #define FW_UPDATE_PATH "./H2OFFT-Lx64"
-
-//These definitions must match SYSCALL_DEFINE3(execve) as in fs/exec.c
-asmlinkage long (*org_sys_execve)(const char __user *filename,
-                           const char __user *const __user *argv,
-                           const char __user *const __user *envp);
-
-static asmlinkage long shim_sys_execve(const char __user *filename,
-                                        const char __user *const __user *argv,
-                                        const char __user *const __user *envp)
-{
-    pr_loc_dbg("%s has been called with filename: %s %s", __FUNCTION__, filename, argv[0]);
-
-    if (strncmp(filename, FW_UPDATE_PATH, sizeof(FW_UPDATE_PATH)) == 0) {
-        pr_loc_inf("Blocked %s from running (firmware update process)", FW_UPDATE_PATH);
-
-        //We cannot just return 0 here - execve() *does NOT* return on success, but replaces the currect process ctx
-        do_exit(0);
-    }
-
-    return org_sys_execve(filename, argv, envp);
-}
 
 static char dmi_product_name_backup[DMI_MAX_LEN] = { '\0' };
 static void patch_dmi(void)
@@ -82,12 +60,7 @@ static void unpatch_dmi(void)
 
 int register_fw_update_shim(void)
 {
-    int out;
-
-    //This, according to many sources (e.g. https://stackoverflow.com/questions/8372912/hooking-sys-execve-on-linux-3-x)
-    // should NOT work. It does work as we're not calling the sys_execve() directly but through the expected ASM stub...
-    //I *think* that's why it work (or I failed to find a scenario where it doesn't yet :D)
-    out = override_syscall(__NR_execve, shim_sys_execve, (void *)&org_sys_execve);
+    int out = add_blocked_execve_filename(FW_UPDATE_PATH);
     if (out != 0)
         return out;
 
@@ -100,11 +73,7 @@ int register_fw_update_shim(void)
 
 int unregister_fw_update_shim(void)
 {
-    int out;
-
-    out = restore_syscall(__NR_execve);
-    if (out != 0)
-        return out;
+    //Do not remove execve here - it will be cleared in one sweep during unregister of interceptor
 
     unpatch_dmi();
 
