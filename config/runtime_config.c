@@ -81,6 +81,31 @@ static inline bool validate_nets(const unsigned short if_num, mac_address *macs[
     return valid;
 }
 
+/**
+ * This function validates consistency of the currently loaded platform config with the current environment
+ *
+ * Some options don't make sense unless the kernel was built with some specific configuration. This function aims to
+ * detect common pitfalls in platforms configuration. This doesn't so much validate the platform definition per se
+ * (but partially too) but the match between platform config chosen vs. kernel currently attempting to run that
+ * platform.
+ */
+static inline bool validate_platform_config(const struct hw_config *hw)
+{
+#ifdef CONFIG_SYNO_X86_SERIAL_PORT_SWAP
+    const bool kernel_serial_swapped = true;
+#else
+    const bool kernel_serial_swapped = false;
+#endif
+
+    //This will not prevent the code from working, so it's not an error state by itself
+    if (unlikely(hw->swap_serial && !kernel_serial_swapped))
+        pr_loc_bug("Your kernel indicates COM1 & COM2 ARE NOT swapped but your platform specifies swapping");
+    else if(unlikely(!hw->swap_serial && kernel_serial_swapped))
+        pr_loc_bug("Your kernel indicates COM1 & COM2 ARE swapped but your platform specifies NO swapping");
+
+    return true;
+}
+
 static int populate_hw_config(struct runtime_config *config)
 {
     //We cannot run with empty model or model which didn't match
@@ -110,6 +135,7 @@ static bool validate_runtime_config(const struct runtime_config *config)
     valid &= validate_sn(&config->sn);
     valid &= validate_vid_pid(&config->boot_media);
     valid &= validate_nets(config->netif_num, config->macs);
+    valid &= validate_platform_config(config->hw_config);
 
     if (valid) {
         pr_loc_dbg("Config validation resulted in %s", valid ? "OK" : "ERR");

@@ -12,7 +12,7 @@ SRCS-y  += compat/string_compat.c \
 		   internal/stealth/sanitize_cmdline.c internal/stealth.c internal/virtual_pci.c \
 		   config/cmdline_delegate.c config/runtime_config.c \
 		   shim/boot_device_shim.c shim/bios/rtc_proxy.c shim/bios/bios_shims_collection.c shim/bios_shim.c \
-		   shim/block_fw_update_shim.c shim/disable_exectutables.c shim/pci_shim.c \
+		   shim/block_fw_update_shim.c shim/disable_exectutables.c shim/pci_shim.c shim/uart_fixer.c \
 	       redpill_main.c
 OBJS   = $(SRCS-y:.c=.o)
 #this module name CAN NEVER be the same as the main file (or it will get weird ;)) and the main file has to be included

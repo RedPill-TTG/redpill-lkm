@@ -43,6 +43,7 @@ struct hw_config {
     //All custom flags
     bool emulate_rtc:1;
     bool swap_serial:1; //Whether ttyS0 and ttyS1 are swapped (reverses CONFIG_SYNO_X86_SERIAL_PORT_SWAP)
+    bool reinit_ttyS0:1; //Should the ttyS0 be forcefully re-initialized after module loads
 };
 
 struct runtime_config {

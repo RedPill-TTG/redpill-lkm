@@ -78,5 +78,8 @@ DEFINE_UNEXPORTED_SHIM(int, do_execve, CP_LIST(struct filename *filename,
 DEFINE_UNEXPORTED_SHIM(struct filename *, getname, CP_LIST(const char __user * filename), CP_LIST(filename), ERR_PTR(-EFAULT));
 #endif
 
+DEFINE_UNEXPORTED_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port), port, -EIO);
+DEFINE_UNEXPORTED_SHIM(int, update_console_cmdline, CP_LIST(char *name, int idx, char *name_new, int idx_new, char *options), CP_LIST(name, idx, name_new, idx_new, options), -EIO);
+
 DEFINE_DYNAMIC_SHIM(void, usb_register_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);
 DEFINE_DYNAMIC_SHIM(void, usb_unregister_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);

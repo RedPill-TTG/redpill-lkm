@@ -34,6 +34,10 @@ CP_DECLARE_SHIM(int, do_execve, CP_LIST(struct filename *filename,
 CP_DECLARE_SHIM(struct filename *, getname, CP_LIST(const char __user *));
 #endif
 
+typedef struct uart_port *uart_port_p;
+CP_DECLARE_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port));
+CP_DECLARE_SHIM(int, update_console_cmdline, CP_LIST(char *name, int idx, char *name_new, int idx_new, char *options));
+
 #include <linux/notifier.h>
 void _usb_register_notify(struct notifier_block *nb);
 void _usb_unregister_notify(struct notifier_block *nb);

@@ -9,6 +9,7 @@
 #include "shim/block_fw_update_shim.h" //Prevent firmware update from running
 #include "shim/disable_exectutables.h" //Disable common problematic executables
 #include "shim/pci_shim.h" //Handles PCI devices emulation
+#include "shim/uart_fixer.h" //Various fixes for UART weirdness
 
 //This (shameful) flag disables shims which cannot be properly unloaded to make debugging of other things easier
 //#define DISABLE_UNLOADABLE
@@ -26,6 +27,7 @@ static int __init init_redpill(void)
     if (
             (out = extract_config_from_cmdline(&current_config)) != 0 //This MUST be the first entry
          || (out = populate_runtime_config(&current_config)) != 0 //This MUST be second
+         || (out = register_uart_fixer(current_config.hw_config)) != 0 //Fix consoles ASAP
          || (out = register_boot_shim(&current_config.boot_media, &current_config.mfg_mode)) //Make sure we're quick with this one
          || (out = register_execve_interceptor()) != 0 //Register this reasonably high as other modules can use it blindly
          || (out = register_bios_shim(current_config.hw_config)) != 0
@@ -64,6 +66,7 @@ static void __exit cleanup_redpill(void)
         unregister_bios_shim,
         unregister_execve_interceptor,
         unregister_boot_shim,
+        unregister_uart_fixer
     };
 
     int out;
