@@ -12,17 +12,17 @@ typedef struct hw_config hw_config_bios_shim_col;
 bool shim_bios_module(const hw_config_bios_shim_col *hw, struct module *mod, unsigned long *vtable_start, unsigned long *vtable_end);
 
 /**
- * Removes all shims from the mfgBIOS
+ * Removes all shims from the mfgBIOS & uninitializes all components used to shim bios module
  */
 bool unshim_bios_module(unsigned long *vtable_start, unsigned long *vtable_end);
 
 /**
- * Forcefully forgets all original calls used to do unshim_bios()
+ * Forcefully forgets all original calls used to do unshim_bios() & cleans-up all other components
  *
  * This function is useful when the BIOS unloads without this module being unloaded - then there's no point in keeping
  * stale entries. This will also prevent warning regarding already-shimmed BIOS when it reloads.
  */
-void flush_bios_shims_history(void);
+void reset_bios_shims(void);
 
 /**
  * Nullifies manual disks LED control

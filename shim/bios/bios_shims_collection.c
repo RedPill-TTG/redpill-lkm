@@ -98,6 +98,7 @@ bool shim_bios_module(const struct hw_config *hw, struct module *mod, unsigned l
 
     if (hw->emulate_rtc) {
         pr_loc_dbg("Platform requires RTC proxy - enabling");
+        register_rtc_proxy_shim();
         shim_entry(vtable_start, VTK_RTC_GET_TIME, rtc_proxy_get_time);
         shim_entry(vtable_start, VTK_RTC_SET_TIME, rtc_proxy_set_time);
         shim_entry(vtable_start, VTK_RTC_INT_APWR, rtc_proxy_init_auto_power_on);
@@ -126,15 +127,16 @@ bool unshim_bios_module(unsigned long *vtable_start, unsigned long *vtable_end)
         vtable_start[i] = org_shimmed_entries[i];
     }
 
-    flush_bios_shims_history();
+    reset_bios_shims();
 
     return true;
 }
 
-void flush_bios_shims_history(void)
+void reset_bios_shims(void)
 {
     memset(org_shimmed_entries, 0, sizeof(org_shimmed_entries));
     memset(cust_shimmed_entries, 0, sizeof(cust_shimmed_entries));
+    unregister_rtc_proxy_shim();
 }
 
 /******************************** Kernel-level shims related to mfgBIOS functionality *********************************/

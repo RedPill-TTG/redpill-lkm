@@ -17,10 +17,13 @@
  *  - https://www.kernel.org/doc/html/latest/admin-guide/rtc.html
  *  - https://embedded.fm/blog/2018/6/5/an-introduction-to-bcd
  */
+#include "../../common.h"
+#include "rtc_proxy.h"
+#include "../shim_base.h" //shim_*()
 #include <linux/mc146818rtc.h>
 #include <linux/bcd.h>
-#include "rtc_proxy.h"
-#include "../../common.h"
+
+#define SHIM_NAME "RTC proxy"
 
 //Confused? See https://slate.com/technology/2016/02/the-math-behind-leap-years.html
 #define year_is_leap(year) !((year)%((year)%25?4:16))
@@ -205,26 +208,26 @@ int rtc_proxy_init_auto_power_on(void)
 
 int rtc_proxy_get_auto_power_on(struct MfgCompatAutoPwrOn *mfgPwrOn)
 {
-    if (auto_power_on_mock == NULL || auto_power_on_mock->num < 1) {
-        pr_loc_wrn("Got an invalid call to %s", __FUNCTION__);
-        return -EPERM;
+    if (unlikely(!auto_power_on_mock)) {
+        pr_loc_bug("Auto power-on mock is not initialized - did you forget to call register?");
+        return -EINVAL;
     }
 
     pr_loc_dbg("Mocking auto-power GET on RTC");
-    memcpy(auto_power_on_mock, mfgPwrOn, sizeof(struct MfgCompatAutoPwrOn));
+    memcpy(mfgPwrOn, auto_power_on_mock, sizeof(struct MfgCompatAutoPwrOn));
 
     return 0;
 }
 
 int rtc_proxy_set_auto_power_on(struct MfgCompatAutoPwrOn *mfgPwrOn)
 {
-    if (mfgPwrOn == NULL || mfgPwrOn->num < 1) { //That's just either a bogus call or a stupid call
+    if (!mfgPwrOn || mfgPwrOn->num < 1) { //That's just either a bogus call or a stupid call
         pr_loc_wrn("Got an invalid call to %s", __FUNCTION__);
-        return -EPERM;
+        return -EINVAL;
     }
 
     pr_loc_dbg("Mocking auto-power SET on RTC");
-    memcpy(mfgPwrOn, auto_power_on_mock, sizeof(struct MfgCompatAutoPwrOn));
+    memcpy(auto_power_on_mock, mfgPwrOn, sizeof(struct MfgCompatAutoPwrOn));
 
     return 0;
 }
@@ -233,5 +236,35 @@ int rtc_proxy_uinit_auto_power_on(void)
 {
     pr_loc_dbg("RTC power-on \"disabled\" via %s", __FUNCTION__);
 
+    return 0;
+}
+
+int unregister_rtc_proxy_shim(void)
+{
+    shim_ureg_in();
+
+    //This is not an error as bios shim collections calls unregister blindly
+    if (!auto_power_on_mock) {
+        pr_loc_dbg("The %s shim is not registered - ignoring", SHIM_NAME);
+        return 0;
+    }
+
+    kfree(auto_power_on_mock);
+    auto_power_on_mock = NULL;
+    shim_ureg_ok();
+    return 0;
+}
+
+int register_rtc_proxy_shim(void)
+{
+    shim_reg_in();
+
+    if (unlikely(auto_power_on_mock)) {
+        pr_loc_wrn("The %s shim is already registered - unregistering first", SHIM_NAME);
+        unregister_rtc_proxy_shim();
+    }
+
+    kzalloc_or_exit_int(auto_power_on_mock, sizeof(struct MfgCompatAutoPwrOn));
+    shim_reg_ok();
     return 0;
 }

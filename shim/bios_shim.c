@@ -100,7 +100,7 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
         bios_shimmed = false;
         vtable_start = vtable_end = NULL;
         enable_symbols_capture();
-        flush_bios_shims_history();
+        reset_bios_shims();
 
         return NOTIFY_OK;
     }

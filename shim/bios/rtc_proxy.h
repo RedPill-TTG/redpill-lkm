@@ -36,4 +36,7 @@ int rtc_proxy_set_auto_power_on(struct MfgCompatAutoPwrOn *mfgPwrOn);
  */
 int rtc_proxy_uinit_auto_power_on(void);
 
+int unregister_rtc_proxy_shim(void);
+int register_rtc_proxy_shim(void);
+
 #endif //REDPILL_RTC_PROXY_H
