@@ -28,7 +28,7 @@ Read about the quirk in a separate repo: https://github.com/RedPill-TTG/dsm-rese
       - `echo '+' > .scmversion` (otherwise it will error-out loading modules)
 4. `make oldconfig ; make modules_prepare`
 5. `cd` back to the module directory
-6. `make LINUX_SRC=....` (path to linux sources, default: `./linux-3.10.x-bromolow-25426`)
+6. `make LINUX_SRC=....` (path to linux sources, default: `../linux-3.10.x-bromolow-25426`)
 7. You will get a `redpill.ko` module as the result, you can `insmod` it
 
 

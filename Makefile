@@ -1,8 +1,8 @@
-ifeq ($(LINUX_SRC),)
-LINUX_SRC := "./linux-3.10.x-bromolow-25426"
-endif
-
 PWD   := $(shell pwd)
+
+ifeq ($(LINUX_SRC),)
+LINUX_SRC := "$(PWD)/../linux-3.10.x-bromolow-25426"
+endif
 
 SRCS-$(DBG_EXECVE) += debug/debug_execve.c
 ccflags-$(DBG_EXECVE) += -DRPDBG_EXECVE
