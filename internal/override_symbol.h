@@ -59,6 +59,20 @@ typedef struct override_symbol_inst override_symbol_inst;
 });
 
 /**
+ * override_symbol() with automatic error handling. See the original function for details.
+ *
+ * @param ptr_var Variable to store ovs pointer
+ */
+#define override_symbol_or_exit_int(ptr_var, name, new_sym_ptr) \
+    (ptr_var) = override_symbol(name, new_sym_ptr); \
+    if (unlikely(IS_ERR((ptr_var)))) { \
+        int _err = PTR_ERR((ptr_var)); \
+        pr_loc_err("Failed to override %s - error=%d", name, _err); \
+        (ptr_var) = NULL; \
+        return _err; \
+    } \
+
+/**
  * Overrides a kernel symbol with something else of your choice
  *
  * @param name Name of the kernel symbol (function) to override
