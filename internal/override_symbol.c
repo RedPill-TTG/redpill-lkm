@@ -89,10 +89,9 @@
 
 #include "override_symbol.h"
 #include "../common.h"
-#include "call_protected.h" //_flush_tlb_all()
-#include <asm/cacheflush.h> //PAGE_ALIGN
+#include "memory.h" //set_mem_addr_ro(), set_mem_addr_rw()
 #include <asm/asm-offsets.h> //__NR_syscall_max & NR_syscalls
-#include <asm/unistd_64.h> //syscalls numbers (e.g. __NR_read)
+#include <asm/unistd.h> //syscalls numbers (e.g. __NR_read)
 #include <linux/kallsyms.h> //kallsyms_lookup_name()
 #include <linux/string.h> //memcpy()
 
@@ -102,9 +101,6 @@ static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
     "\x48\xb8" "\x00\x00\x00\x00\x00\x00\x00\x00" /* MOVQ 64-bit-vaddr, %rax */
     "\xff\xe0" /* JMP *%rax */
 ;
-
-#define PAGE_ALIGN_BOTTOM(addr) (PAGE_ALIGN(addr) - PAGE_SIZE) //aligns the memory address to bottom of the page boundary
-#define NUM_PAGES_BETWEEN(low, high) (((PAGE_ALIGN_BOTTOM(high) - PAGE_ALIGN_BOTTOM(low)) / PAGE_SIZE) + 1)
 
 #define WITH_OVS_LOCK(__sym, code)                                     \
     do {                                                               \
@@ -129,74 +125,20 @@ struct override_symbol_inst {
 };
 
 /**
- * Disables write-protection for the memory where symbol resides
- *
- * There are a million different methods of circumventing the memory protection in Linux. The reason being the kernel
- * people make it harder and harder to modify syscall table (& others in the process), which in general is a great idea.
- * There are two core methods people use: 1) disabling CR0 WP bit, and 2) setting memory page(s) as R/W.
- * The 1) is a flag, present on x86 CPUs, which when cleared configures the MMU to *ignore* write protection set on
- * memory regions. However, this flag is per-core (=synchronization problems) and it works as all-or-none. We don't
- * want to leave such a big thing disabled (especially for long time).
- * The second mechanism disabled memory protection on per-page basis. Normally the kernel contains set_memory_rw() which
- * does what it says - sets the address (which should be lower-page aligned) to R/W. However, this function is evil for
- * some time (~2.6?). In its course it calls static_protections() which REMOVES the R/W flag from the request
- * (effectively making the call a noop) while still returning 0. Guess how long we debugged that... additionally, that
- * function is removed in newer kernels.
- * The easiest way is to just lookup the page table entry for a given address, modify the R/W attribute directly and
- * dump CPU caches. This will work as there's no middle-man to mess with our request.
- */
-static void set_mem_rw(const unsigned long vaddr, unsigned long len)
-{
-    unsigned long addr = PAGE_ALIGN_BOTTOM(vaddr);
-    pr_loc_dbg("Disabling memory protection for page(s) at %p+%lu/%u (<<%p)", (void *) vaddr, len,
-               (unsigned int) NUM_PAGES_BETWEEN(vaddr, vaddr + len), (void *) addr);
-
-    //theoretically this should use set_pte_atomic() but we're touching pages that will not be modified by anything else
-    unsigned int level;
-    for(; addr <= vaddr; addr += PAGE_SIZE) {
-        pte_t *pte = lookup_address(addr, &level);
-        pte->pte |= _PAGE_RW;
-    }
-
-    _flush_tlb_all();
-}
-
-/**
- * Reverses set_mem_rw()
- *
- * See set_mem_rw() for details
- */
-static void set_mem_ro(const unsigned long vaddr, unsigned long len)
-{
-    unsigned long addr = PAGE_ALIGN_BOTTOM(vaddr);
-    pr_loc_dbg("Enabling memory protection for page(s) at %p+%lu/%u (<<%p)", (void *) vaddr, len,
-               (unsigned int) NUM_PAGES_BETWEEN(vaddr, vaddr + len), (void *) addr);
-
-    //theoretically this should use set_pte_atomic() but we're touching pages that will not be modified by anything else
-    unsigned int level;
-    for(; addr <= vaddr; addr += PAGE_SIZE) {
-        pte_t *pte = lookup_address(addr, &level);
-        pte->pte &= ~_PAGE_RW;
-    }
-
-    _flush_tlb_all();
-}
-
-/**
- * Wrapper for set_mem_rw() which works with symbols
+ * Wrapper for set_mem_addr_rw() which works with symbols
  */
 static void __always_inline set_symbol_rw(struct override_symbol_inst *sym)
 {
-    set_mem_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
+    set_mem_addr_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
     sym->mem_protected = true;
 }
 
 /**
- * Wrapper for set_mem_ro() which works with symbols
+ * Wrapper for set_mem_addr_ro() which works with symbols
  */
 static void __always_inline set_symbol_ro(struct override_symbol_inst *sym)
 {
-    set_mem_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
+    set_mem_addr_rw((unsigned long)sym->org_sym_ptr, OVERRIDE_JUMP_SIZE);
     sym->mem_protected = false;
 }
 
@@ -462,12 +404,12 @@ int override_syscall(unsigned int syscall_num, const void *new_sysc_ptr, void * 
     if (org_sysc_ptr != 0)
         *org_sysc_ptr = overridden_syscall[syscall_num];
 
-    set_mem_rw((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
+    set_mem_addr_rw((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
     pr_loc_dbg("syscall #%d originally %ps<%p> will now be %ps<%p> @ %d", syscall_num,
                (void *) overridden_syscall[syscall_num], (void *) overridden_syscall[syscall_num], new_sysc_ptr,
                new_sysc_ptr, smp_processor_id());
     syscall_table_ptr[syscall_num] = (unsigned long) new_sysc_ptr;
-    set_mem_ro((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
+    set_mem_addr_ro((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
 
     print_syscall_table(syscall_num-5, syscall_num+5);
 
@@ -495,12 +437,12 @@ int restore_syscall(unsigned int syscall_num)
 
     print_syscall_table(syscall_num-5, syscall_num+5);
 
-    set_mem_rw((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
+    set_mem_addr_rw((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
     pr_loc_dbg("Restoring syscall #%d from %ps<%p> to original %ps<%p>", syscall_num,
                (void *) syscall_table_ptr[syscall_num], (void *) syscall_table_ptr[syscall_num],
                (void *) overridden_syscall[syscall_num], (void *) overridden_syscall[syscall_num]);
     syscall_table_ptr[syscall_num] = (unsigned long)overridden_syscall[syscall_num];
-    set_mem_rw((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
+    set_mem_addr_rw((long)&syscall_table_ptr[syscall_num], sizeof(unsigned long));
 
     print_syscall_table(syscall_num-5, syscall_num+5);
 

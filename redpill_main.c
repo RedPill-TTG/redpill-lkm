@@ -104,4 +104,8 @@ static void __exit cleanup_(void)
 module_exit(cleanup_);
 
 MODULE_AUTHOR("TTG");
+MODULE_VERSION(RP_VERSION_STR);
+#endif
+
+
 MODULE_LICENSE("GPL");
