@@ -36,8 +36,9 @@ static void patch_dmi(void)
     if (org_len > DMI_MAX_LEN)
         pr_loc_wrn("DMI field longer than %zu - restoring on module unload will be limited to that length", org_len);
 
-    strncpy((char *)&dmi_product_name_backup, ptr, DMI_MAX_LEN);
-    dmi_product_name_backup[DMI_MAX_LEN-1] = '\0';
+    if(strlcpy((char *)&dmi_product_name_backup, ptr, DMI_MAX_LEN) < 0)
+        pr_loc_wrn("Backup DMI truncated to %d", DMI_MAX_LEN);
+
     pr_loc_dbg("Saved backup DMI: %s", dmi_product_name_backup);
 
     //This TECHNICALLY can cause overflow but DMI has buffer for such a short string

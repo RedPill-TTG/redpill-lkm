@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/slab.h> //kmalloc
 #include <linux/string.h>
+#include "compat/string_compat.h"
 #include <linux/types.h> //bool & others
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)

@@ -17,8 +17,8 @@ static bool extract_hw(syno_hw *model, const char *param_pointer)
         return false;
     }
 
-    strncpy((char *)model, param_pointer + sizeof_str_chunk(CMDLINE_KT_HW), sizeof(syno_hw));
-    *model[sizeof(syno_hw) - 1] = '\0';
+    if (strscpy((char *)model, param_pointer + sizeof_str_chunk(CMDLINE_KT_HW), sizeof(syno_hw)) < 0)
+        pr_loc_wrn("HW version truncated to %zu", sizeof(syno_hw)-1);
 
     pr_loc_dbg("HW version set to: %s", (char *)model);
 
@@ -38,8 +38,8 @@ static bool extract_sn(serial_no *sn, const char *param_pointer)
         return false;
     }
 
-    strncpy((char *)sn, param_pointer + sizeof_str_chunk(CMDLINE_KT_SN), sizeof(serial_no));
-    *sn[sizeof(serial_no) - 1] = '\0';
+    if(strscpy((char *)sn, param_pointer + sizeof_str_chunk(CMDLINE_KT_SN), sizeof(serial_no)) < 0)
+        pr_loc_wrn("S/N truncated to %zu", sizeof(serial_no)-1);
 
     pr_loc_dbg("S/N version set to: %s", (char *)sn);
 
@@ -238,8 +238,9 @@ static bool extract_netif_macs(mac_address *macs[MAX_NET_IFACES], const char *pa
             goto out_found;
         }
 
-        strncpy((char *)macs[i], param_pointer + sizeof_str_chunk(CMDLINE_KT_MAC1), sizeof(mac_address));
-        *macs[i][sizeof(mac_address) - 1] = '\0';
+        if(strscpy((char *)macs[i], param_pointer + sizeof_str_chunk(CMDLINE_KT_MAC1), sizeof(mac_address)) < 0)
+            pr_loc_wrn("MAC #%d truncated to %zu", i+1, sizeof(mac_address)-1);
+
 
         pr_loc_dbg("Set MAC #%d: %s", i+1, (char *)macs[i]);
         goto out_found;
