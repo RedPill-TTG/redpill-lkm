@@ -17,7 +17,7 @@ SRCS-y  += compat/string_compat.c \
 		   \
 		   shim/boot_dev/usb_boot_shim.c shim/boot_dev/sata_boot_shim.c shim/boot_device_shim.c shim/bios/rtc_proxy.c \
 		   shim/bios/bios_shims_collection.c shim/bios_shim.c shim/block_fw_update_shim.c shim/disable_exectutables.c \
-		   shim/pci_shim.c shim/uart_fixer.c \
+		   shim/pci_shim.c shim/pmu_shim.c shim/uart_fixer.c \
 		   \
 	       redpill_main.c
 OBJS   = $(SRCS-y:.c=.o)

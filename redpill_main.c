@@ -10,6 +10,7 @@
 #include "shim/disable_exectutables.h" //Disable common problematic executables
 #include "shim/pci_shim.h" //Handles PCI devices emulation
 #include "shim/uart_fixer.h" //Various fixes for UART weirdness
+#include "shim/pmu_shim.h" //Emulates the platform management unit
 
 //Handle versioning stuff
 #define RP_VERSION_MAJOR 0
@@ -49,6 +50,7 @@ static int __init init_redpill(void)
 #ifndef DBG_DISABLE_UNLOADABLE
          || (out = register_pci_shim(current_config.hw_config)) != 0
 #endif
+//         || (out = register_pmu_shim(current_config.hw_config)) != 0
          //This one should be done really late so that if it does hide something it's not hidden from us
          || (out = initialize_stealth(&current_config)) != 0
        )
@@ -72,6 +74,7 @@ static void __exit cleanup_redpill(void)
 
     int (*cleanup_handlers[])(void ) = {
         uninitialize_stealth,
+//        unregister_pmu_shim,
 #ifndef DBG_DISABLE_UNLOADABLE
         unregister_pci_shim,
 #endif
