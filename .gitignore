@@ -53,3 +53,4 @@ dkms.conf
 
 email.patch
 linux-*/
+.idea/
