@@ -120,7 +120,7 @@ static void register_device_notifier(void)
     //Even if the module was already loaded register_device_notifier() should not be called twice before module is
     // unloaded and reloaded
     if (unlikely(device_notify_registered)) {
-        pr_loc_err("BUG: device notify re-registration via %s w/o module unload (?!)", __FUNCTION__);
+        pr_loc_bug("Device notify re-registration via %s w/o module unload (?!)", __FUNCTION__);
         return;
     }
 
@@ -134,7 +134,7 @@ static void register_device_notifier(void)
 static void unregister_device_notifier(void)
 {
     if (unlikely(!device_notify_registered)) {
-        pr_loc_err("BUG: %s called while notifier not registered", __FUNCTION__);
+        pr_loc_bug("%s called while notifier not registered", __FUNCTION__);
         return;
     }
 
@@ -180,7 +180,7 @@ static struct notifier_block usbcore_notifier_block = {
 static void register_usbcore_notifier(void)
 {
     if (unlikely(module_notify_registered)) {
-        pr_loc_err("BUG: %s called while notifier already registered", __FUNCTION__);
+        pr_loc_bug("%s called while notifier already registered", __FUNCTION__);
         return;
     }
 
@@ -205,7 +205,7 @@ static void register_usbcore_notifier(void)
 static void unregister_usbcore_notifier(void)
 {
     if (unlikely(!module_notify_registered)) { //unregister should be called first if so
-        pr_loc_err("BUG: %s called while notifier not registered", __FUNCTION__);
+        pr_loc_bug("%s called while notifier not registered", __FUNCTION__);
         return;
     }
 

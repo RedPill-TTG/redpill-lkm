@@ -19,7 +19,7 @@
 #define UNEXPORTED_ADDR(name, fail_return) \
     unsigned long name##__addr = kallsyms_lookup_name(#name); \
     if (name##__addr == 0) { \
-        pr_loc_err("Failed to fetch %s() syscall address", #name); \
+        pr_loc_bug("Failed to fetch %s() syscall address", #name); \
         return fail_return; \
     } \
     pr_loc_dbg("Got addr %lx for %s", name##__addr, #name);
@@ -27,7 +27,7 @@
 #define DYNAMIC_ADDR(name, fail_return) \
     name##__ret name##__ptr = (name##__ret)__symbol_get(#name); \
     if (!name##__ptr) { \
-        pr_loc_err("Failed to fetch %s() symbol (is that module loaded?)", #name); \
+        pr_loc_bug("Failed to fetch %s() symbol (is that module loaded?)", #name); \
         return fail_return; \
     } \
     pr_loc_dbg("Got ptr %p for %s", name##__ptr, #name); \

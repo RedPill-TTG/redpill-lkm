@@ -18,7 +18,7 @@ static void inline shim_entry(unsigned long *vtable_start, const unsigned int id
     //@todo OK, this is buggy - if you shim an entry which is not present in the original vtable (i.e. 0000000000000000)
     // you will never be able to recover it using unshim... but you shouldn't touch such entries anyway
     if (unlikely(shimmed_entries[idx])) {
-        pr_loc_wrn("Index %d already shimmed - will be replaced (bug?)", idx);
+        pr_loc_wrn("Index %d already shimmed - will be replaced (possible bug?)", idx);
     } else {
         shimmed_entries[idx] = vtable_start[idx]; //Only save original-original entry (not the override one)
     }

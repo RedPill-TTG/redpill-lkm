@@ -266,7 +266,7 @@ int override_syscall(unsigned int syscall_num, const void *new_sysc_ptr, void * 
     print_syscall_table(syscall_num-5, syscall_num+5);
 
     if (unlikely(overridden_syscall[syscall_num])) {
-        pr_loc_wrn("Syscall %d is already overridden - will be replaced (bug?)", syscall_num);
+        pr_loc_bug("Syscall %d is already overridden - will be replaced (bug?)", syscall_num);
     } else {
         //Only save original-original entry (not the override one)
         overridden_syscall[syscall_num] = (unsigned long *)syscall_table_ptr[syscall_num];
