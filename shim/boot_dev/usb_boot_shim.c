@@ -38,6 +38,8 @@
  *  - https://lwn.net/Articles/160501/
  */
 #include "usb_boot_shim.h"
+#include "boot_shim_base.h" //set_shimmed_boot_dev(), get_shimmed_boot_dev(), usb_shim_as_boot_dev()
+#include "../shim_base.h" //shim_*
 #include "../../common.h"
 #include "../../config/runtime_config.h" //struct boot_device & consts
 #include "../../internal/helper/symbol_helper.h" //kernel_has_symbol()
@@ -46,15 +48,11 @@
 #include <linux/usb.h>
 #include <linux/module.h> //struct module
 
-#define SBOOT_RET_VID 0xf400 //Retail boot drive VID
-#define SBOOT_RET_PID 0xf400 //Retail boot drive PID
-#define SBOOT_MFG_VID 0xf401 //Force-reinstall boot drive VID
-#define SBOOT_MFG_PID 0xf401 //Force-reinstall boot drive PID
+#define SHIM_NAME "USB boot device"
 
 static bool module_notify_registered = false;
 static bool device_notify_registered = false;
-static bool device_mapped = false;
-static const struct boot_media *boot_media;
+static const struct boot_media *boot_media = NULL; //passed to usb_shim_as_boot_dev()
 
 /**
  * Responds to USB devices being added/removed
@@ -62,35 +60,32 @@ static const struct boot_media *boot_media;
 static int device_notifier_handler(struct notifier_block *b, unsigned long event, void *data)
 {
     struct usb_device *device = (struct usb_device*)data;
+    struct usb_device *prev_device = get_shimmed_boot_dev();
 
     if (event == USB_DEVICE_ADD) {
         //TODO: Can we even check if it matched mass storage here... (bInterfaceClass == USB_CLASS_MASS_STORAGE)
         if (boot_media->vid == VID_PID_EMPTY || boot_media->pid == VID_PID_EMPTY) {
-            pr_loc_wrn("Your boot device VID and/or PID is not set - using device found <vid=%04x, pid=%04x>",
-                       device->descriptor.idVendor, device->descriptor.idProduct);
+            pr_loc_wrn("Your boot device VID and/or PID is not set - "
+                       "using device found <vid=%04x, pid=%04x> (prev_shimmed=%d)",
+                       device->descriptor.idVendor, device->descriptor.idProduct, prev_device ? 1:0);
         } else if (device->descriptor.idVendor != boot_media->vid || device->descriptor.idProduct != boot_media->pid) {
-            pr_loc_dbg("Found new device <vid=%04x, pid=%04x> - didn't match expected <vid=%04x, pid=%04x>",
-                       device->descriptor.idVendor, device->descriptor.idProduct, boot_media->vid, boot_media->pid);
+            pr_loc_dbg("Found new device <vid=%04x, pid=%04x> - "
+                       "didn't match expected <vid=%04x, pid=%04x> (prev_shimmed=%d)",
+                       device->descriptor.idVendor, device->descriptor.idProduct, boot_media->vid, boot_media->pid,
+                       prev_device ? 1:0);
 
             return NOTIFY_OK;
         }
 
         //This will happen especially when VID+PID weren't set and two USB devices were detected
-        if (device_mapped) {
+        if (prev_device) {
             pr_loc_wrn("Boot device was already shimmed but a new matching device appeared again - "
                        "this may produce unpredictable outcomes! Ignoring - check your hardware");
             return NOTIFY_OK;
         }
 
-        if (boot_media->mfg_mode) {
-            device->descriptor.idVendor = SBOOT_MFG_VID;
-            device->descriptor.idProduct = SBOOT_MFG_PID;
-        } else {
-            device->descriptor.idVendor = SBOOT_RET_VID;
-            device->descriptor.idProduct = SBOOT_RET_PID;
-        }
-
-        device_mapped = true;
+        usb_shim_as_boot_dev(boot_media, device);
+        set_shimmed_boot_dev(device);
 
         pr_loc_inf("Device <vid=%04x, pid=%04x> shimmed to <vid=%04x, pid=%04x>", boot_media->vid, boot_media->pid,
                    device->descriptor.idVendor, device->descriptor.idProduct);
@@ -98,13 +93,10 @@ static int device_notifier_handler(struct notifier_block *b, unsigned long event
         return NOTIFY_OK;
     }
 
-    if (device_mapped && event == USB_DEVICE_REMOVE &&
-        (device->descriptor.idVendor == SBOOT_MFG_VID || device->descriptor.idVendor == SBOOT_RET_VID) &&
-        (device->descriptor.idProduct == SBOOT_MFG_PID || device->descriptor.idProduct == SBOOT_RET_PID)
-       ) {
-        pr_loc_wrn("Previously shimmed boot device disconnected!");
-        device_mapped = false;
 
+    if (prev_device && event == USB_DEVICE_REMOVE && device == prev_device) {
+        pr_loc_wrn("Previously shimmed boot device gone away");
+        reset_shimmed_boot_dev();
         return NOTIFY_OK;
     }
 
@@ -112,8 +104,8 @@ static int device_notifier_handler(struct notifier_block *b, unsigned long event
 }
 
 static struct notifier_block device_notifier_block = {
-        .notifier_call = device_notifier_handler,
-        .priority = INT_MIN, //We need to be first
+    .notifier_call = device_notifier_handler,
+    .priority = INT_MIN, //We need to be first
 };
 /**
  * Watches for USB events
@@ -162,7 +154,7 @@ static int ubscore_notifier_handler(struct notifier_block * self, unsigned long 
     if (state == MODULE_STATE_GOING) {
         //TODO: call unregister with some force flag?
         device_notify_registered = false;
-        device_mapped = false;
+        reset_shimmed_boot_dev();
         pr_loc_wrn("usbcore module unloaded - this should not happen normally");
         return NOTIFY_OK;
     }
@@ -234,6 +226,8 @@ static int unregister_usbcore_notifier(void)
 
 int register_usb_boot_shim(const struct boot_media *boot_dev_config)
 {
+    shim_reg_in();
+
     if (unlikely(boot_dev_config->type != BOOT_MEDIA_USB)) {
         pr_loc_bug("%s doesn't support device type %d", __FUNCTION__, boot_dev_config->type);
         return -EINVAL;
@@ -250,12 +244,14 @@ int register_usb_boot_shim(const struct boot_media *boot_dev_config)
     if (out != 0)
         return out;
 
-    pr_loc_dbg("USB boot shim registered");
+    shim_reg_ok();
     return out;
 }
 
 int unregister_usb_boot_shim(void)
 {
+    shim_ureg_in();
+
     if (unlikely(!boot_media)) {
         pr_loc_bug("USB boot shim is not registered");
         return -ENOENT;
@@ -270,6 +266,6 @@ int unregister_usb_boot_shim(void)
 
     boot_media = NULL;
 
-    pr_loc_dbg("USB boot shim unregistered");
+    shim_ureg_ok();
     return out;
 }
