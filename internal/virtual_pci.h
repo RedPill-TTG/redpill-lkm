@@ -75,7 +75,7 @@ struct pci_dev_descriptor {
     u8 interrupt_pin;
     u8 min_gnt;
     u8 max_lat;
-} __attribute__ ((packed));
+} __packed;
 extern const struct pci_dev_descriptor pci_dev_conf_default_normal_dev; //See details in the .c file
 
 //Support for bridges wasn't tested
@@ -124,14 +124,14 @@ struct pci_pci_bridge_descriptor {
     u8 interrupt_line;
     u8 interrupt_pin;
     u16 bridge_ctrl;
-} __attribute__ ((packed));
+} __packed;
 
 //This is implemented currently
 struct pci_dev_capability {
     u8 cap_id; //see PCI_CAP_ID_*, set to 0x00 to denote null-capability
     u8 cap_next; //offset where next capability exists, set to 0x00 to denote null-capability
     u8 cap_data[];
-} __attribute__ ((packed));
+} __packed;
 
 /**
  * Adds new device (along with the bus if needed)
