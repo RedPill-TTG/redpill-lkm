@@ -34,10 +34,11 @@
 
 #include "override_symbol.h"
 #include "../common.h"
+#include "call_protected.h" //set_memory_*()
 #include <linux/preempt.h> //preempt_* macros
 #include <asm/processor-flags.h> //X86_* flags
 #include <asm/special_insns.h> //*_cr0()
-#include <asm/cacheflush.h> //set_memory_*()
+#include <asm/cacheflush.h> //PAGE_ALIGN
 #include <asm/asm-offsets.h> //__NR_syscall_max & NR_syscalls
 #include <generated/uapi/asm/unistd_64.h> //syscalls numbers (e.g. __NR_read)
 #include <linux/kallsyms.h> //kallsyms_lookup_name()
@@ -75,7 +76,7 @@ static int disable_symbol_wp(const unsigned long vaddr)
     cr0 = read_cr0() & (~X86_CR0_WP);
     write_cr0(cr0);
 
-    out = set_memory_rw(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
+    out = _set_memory_rw(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
     if (out != 0) {
         pr_loc_err("set_memory_rw() failed: %d", out);
         cr0 |= X86_CR0_WP;
@@ -94,7 +95,7 @@ static int enable_symbol_wp(const unsigned long vaddr)
     pr_loc_dbg("Enabling memory protection for page at %p (<<%p)", (void *)vaddr, (void *)PAGE_ALIGN(vaddr));
 
     int out = 0;
-    out = set_memory_ro(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
+    out = _set_memory_ro(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
     if (out != 0) {
         pr_loc_err("set_memory_ro() failed: %d", out);
 

@@ -7,31 +7,49 @@
 //This will eventually stop working (since Linux >=5.7.0 has the kallsyms_lookup_name() removed)
 //Workaround will be needed: https://github.com/xcellerator/linux_kernel_hacking/issues/3
 
-//BELOW ARE ALL RE-DEFINED PRIVATE FUNCTIONS
-//All functions headers are the same as their normal counterparts except:
-// 1. marked as inline
-// 2. _ prefixed
-// 3. non-static
-
 #define __VOID_RETURN__
-#define UNEXPORTED_ASML(name, type, ...) extern asmlinkage type name(__VA_ARGS__)
-#define UNEXPORTED_TYPD(name) typedef typeof(name) *name##__ret
-#define UNEXPORTED_ADDR(name, fail_return) \
-    unsigned long name##__addr = kallsyms_lookup_name(#name); \
-    if (name##__addr == 0) { \
-        pr_loc_bug("Failed to fetch %s() syscall address", #name); \
-        return fail_return; \
-    } \
-    pr_loc_dbg("Got addr %lx for %s", name##__addr, #name);
+//This macro should be used to export symbols which aren't normally EXPORT_SYMBOL/EXPORT_SYMBOL_GPL in the kernel but
+// they exist within the kernel (and not a loadable module!). Keep in mind that most of the time "static" cannot be
+// reexported using this trick.
+//All re-exported function will have _ prefix (e.g. foo() becomes _foo())
+#define DEFINE_UNEXPORTED_SHIM(return_type, org_function_name, call_args, call_vars, fail_return) \
+  extern asmlinkage return_type org_function_name(call_args);                                     \
+  typedef typeof(org_function_name) *org_function_name##__ret;                                    \
+  static unsigned long org_function_name##__addr = 0;                                             \
+  return_type _##org_function_name(call_args)                                                     \
+  {                                                                                               \
+      if (org_function_name##__addr == 0) {                                                       \
+          org_function_name##__addr = kallsyms_lookup_name(#org_function_name);                   \
+          if (org_function_name##__addr == 0) {                                                   \
+              pr_loc_bug("Failed to fetch %s() syscall address", #org_function_name);             \
+              return fail_return;                                                                 \
+          }                                                                                       \
+          pr_loc_dbg("Got addr %lx for %s", org_function_name##__addr, #org_function_name);       \
+      }                                                                                           \
+                                                                                                  \
+      return ((org_function_name##__ret)org_function_name##__addr)(call_vars);                    \
+  }
 
-#define DYNAMIC_ADDR(name, fail_return) \
-    name##__ret name##__ptr = (name##__ret)__symbol_get(#name); \
-    if (!name##__ptr) { \
-        pr_loc_bug("Failed to fetch %s() symbol (is that module loaded?)", #name); \
-        return fail_return; \
-    } \
-    pr_loc_dbg("Got ptr %p for %s", name##__ptr, #name); \
-    __symbol_put(#name); //Doing this BEFORE calling the func. creates a TINY window where the symbol may "escape"
+//This macro should be used to export symbols which are normally exported by modules in situations where this module
+// must be loaded before such module exporting the symbol.
+//Normally if symbol for module "X" is used in "Y" the kernel will complain that "X" muse be loaded before "Y".
+//All re-exported function will have _ prefix (e.g. foo() becomes _foo())
+#define DEFINE_DYNAMIC_SHIM(return_type, org_function_name, call_args, call_vars, fail_return)                        \
+  extern asmlinkage return_type org_function_name(call_args);                                                         \
+  typedef typeof(org_function_name) *org_function_name##__ret;                                                        \
+  return_type _##org_function_name(call_args)                                                                         \
+  {                                                                                                                   \
+      org_function_name##__ret org_function_name##__ptr = (org_function_name##__ret)__symbol_get(#org_function_name); \
+      if (!org_function_name##__ptr) {                                                                                \
+          pr_loc_bug("Failed to fetch %s() symbol (is that module loaded?)", #org_function_name);                     \
+          return fail_return;                                                                                         \
+      }                                                                                                               \
+      pr_loc_dbg("Got ptr %p for %s", org_function_name##__ptr, #org_function_name);                                  \
+      /*Doing this BEFORE the call makes a TINY window where the symbol can "escape" but it's protects from deadlock*/\
+      __symbol_put(#org_function_name);                                                                               \
+                                                                                                                      \
+      return ((org_function_name##__ret)org_function_name##__ptr)(call_vars);                                         \
+  }
 //********************************************************************************************************************//
 
 bool kernel_has_symbol(const char *name) {
@@ -44,26 +62,13 @@ bool kernel_has_symbol(const char *name) {
     return false;
 }
 
-UNEXPORTED_ASML(cmdline_proc_show, int, struct seq_file *m, void *v);
-UNEXPORTED_TYPD(cmdline_proc_show);
-int _cmdline_proc_show(struct seq_file *m, void *v)
-{
-    UNEXPORTED_ADDR(cmdline_proc_show, -EFAULT);
-    return ((cmdline_proc_show__ret)cmdline_proc_show__addr)(m, v);
-}
+DEFINE_UNEXPORTED_SHIM(int, cmdline_proc_show, CP_LIST(struct seq_file *m, void *v), CP_LIST(m, v), -EFAULT);
 
-UNEXPORTED_ASML(usb_register_notify, void, struct notifier_block *nb);
-UNEXPORTED_TYPD(usb_register_notify);
-void _usb_register_notify(struct notifier_block *nb)
-{
-    DYNAMIC_ADDR(usb_register_notify, __VOID_RETURN__);
-    ((usb_register_notify__ret)usb_register_notify__ptr)(nb);
-}
+//See https://github.com/torvalds/linux/commit/6bbb614ec478961c7443086bdf7fd6784479c14a
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+DEFINE_UNEXPORTED_SHIM(int, set_memory_ro, CP_LIST(unsigned long addr, int numpages), CP_LIST(addr, numpages), -EFAULT);
+DEFINE_UNEXPORTED_SHIM(int, set_memory_rw, CP_LIST(unsigned long addr, int numpages), CP_LIST(addr, numpages), -EFAULT);
+#endif
 
-UNEXPORTED_ASML(usb_unregister_notify, void, struct notifier_block *nb);
-UNEXPORTED_TYPD(usb_unregister_notify);
-void _usb_unregister_notify(struct notifier_block *nb)
-{
-    DYNAMIC_ADDR(usb_unregister_notify, __VOID_RETURN__);
-    ((usb_unregister_notify__ret)usb_unregister_notify__ptr)(nb);
-}
+DEFINE_DYNAMIC_SHIM(void, usb_register_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);
+DEFINE_DYNAMIC_SHIM(void, usb_unregister_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);
