@@ -2,6 +2,7 @@
 #include "platforms.h"
 #include "../common.h"
 #include "cmdline_delegate.h"
+#include "../internal/uart/uart_defs.h"
 
 struct runtime_config current_config = {
     .hw = { '\0' },
@@ -91,7 +92,7 @@ static inline bool validate_nets(const unsigned short if_num, mac_address *macs[
  */
 static inline bool validate_platform_config(const struct hw_config *hw)
 {
-#ifdef CONFIG_SYNO_X86_SERIAL_PORT_SWAP
+#ifdef UART_BUG_SWAPPED
     const bool kernel_serial_swapped = true;
 #else
     const bool kernel_serial_swapped = false;

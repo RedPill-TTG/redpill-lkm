@@ -10,6 +10,7 @@ ccflags-$(DBG_EXECVE) += -DRPDBG_EXECVE
 SRCS-y  += compat/string_compat.c \
 		   internal/override_symbol.c internal/intercept_execve.c internal/call_protected.c \
 		   internal/stealth/sanitize_cmdline.c internal/stealth.c internal/virtual_pci.c \
+		   internal/uart/vuart_virtual_irq.c internal/uart/virtual_uart.c \
 		   config/cmdline_delegate.c config/runtime_config.c \
 		   shim/boot_device_shim.c shim/bios/rtc_proxy.c shim/bios/bios_shims_collection.c shim/bios_shim.c \
 		   shim/block_fw_update_shim.c shim/disable_exectutables.c shim/pci_shim.c shim/uart_fixer.c \

@@ -2,32 +2,10 @@
 #include "../common.h"
 #include "../../config/runtime_config.h" //hw_config
 #include "../../internal/call_protected.h" //early_serial_setup(), update_console_cmdline()
-#include <asm/serial.h> //flags for pc_com*
-#include <linux/serial_core.h> //struct uart_port
+#include "../../internal/uart/uart_defs.h" //struct uart_port, COM ports definition
 #include <linux/serial_8250.h> //serial8250_unregister_port
 #include <linux/console.h> //console_lock(), console_unlock()
 #include <linux/sched.h> //for_each_process, kill_pgrp
-
-//They changed name of flags const: https://github.com/torvalds/linux/commit/196cf358422517b3ff3779c46a1f3e26fb084172
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-#define STD_COMX_FLAGS STD_COM_FLAGS
-#endif
-
-#define CONSOLE_NAME_UART "ttyS"
-#define CONSOLE_BAUD_UART "115200n8"
-//These definitions are taken from asm/serial.h for a normal (i.e. non-swapped) UART1/COM1 port on an x86 PC
-static const struct uart_port pc_com1_port = {
-    .iobase = 0x3f8,
-    .uartclk = BASE_BAUD,
-    .irq = 4,
-    .flags = STD_COMX_FLAGS
-};
-static const struct uart_port pc_com2_port = {
-    .iobase = 0x2f8,
-    .uartclk = BASE_BAUD,
-    .irq = 3,
-    .flags = STD_COMX_FLAGS
-};
 
 static bool serial_swapped = false; //Whether ttyS0 and ttyS1 were swapped
 static bool ttyS0_force_initted = false; //Was ttyS0 forcefully initialized by us?
@@ -86,14 +64,13 @@ static void restart_ttys(void)
  */
 static int swap_uarts(int from, int to)
 {
-    int out = 0;
     struct console *con;
     struct console *ttyS0_con = NULL; //Populated by a console which was set to be on a *REAL* ttyS0 (ttyS1 swapped)
     struct console *ttyS1_con = NULL; //Populated by a console which was set to be on a *REAL* ttyS1 (ttyS0 swapped)
 
     console_lock(); //Stops (and buffers) printk calls while pulling console semaphore down
     for_each_console(con) {
-        if (strcmp(con->name, CONSOLE_NAME_UART) != 0)
+        if (strcmp(con->name, STD_COMX_DEV_NAME) != 0)
             continue;
 
         pr_loc_dbg("Swapping console %s%d index", con->name, con->index);
@@ -107,11 +84,11 @@ static int swap_uarts(int from, int to)
     }
     console_unlock(); //Flushes printks and releases semaphore
 
-    pr_loc_inf("Swapped %s0 & %s1, updating console %s%d => %s%d", CONSOLE_NAME_UART, CONSOLE_NAME_UART,
-               CONSOLE_NAME_UART, from, CONSOLE_NAME_UART, to);
+    pr_loc_inf("Swapped %s0 & %s1, updating console %s%d => %s%d", STD_COMX_DEV_NAME, STD_COMX_DEV_NAME,
+               STD_COMX_DEV_NAME, from, STD_COMX_DEV_NAME, to);
 
     //This call is only successful when loading early (not in the shell) so it CAN fail
-    _update_console_cmdline(CONSOLE_NAME_UART, from, CONSOLE_NAME_UART, to, CONSOLE_BAUD_UART);
+    _update_console_cmdline(STD_COMX_DEV_NAME, from, STD_COMX_DEV_NAME, to, SRD_COMX_BAUD_OPTS);
     serial_swapped = true;
     restart_ttys();
 
@@ -129,7 +106,12 @@ static int swap_uarts(int from, int to)
 static int fix_muted_ttyS0(void)
 {
     int out = 0;
-    struct uart_port port = pc_com1_port;
+    struct uart_port port = {
+        .iobase = STD_COM1_IOBASE,
+        .uartclk = STD_COMX_BAUD,
+        .irq = STD_COM1_IRQ,
+        .flags = STD_COMX_FLAGS
+    };
 
     if ((out = _early_serial_setup(&port)) != 0) {
         pr_loc_err("Failed to register ttyS0 to hw port @ %lx", port.iobase);

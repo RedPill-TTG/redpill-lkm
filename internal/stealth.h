@@ -15,6 +15,11 @@
 #define STEALTH_MODE STEALTH_MODE_BASIC
 #endif
 
+//Some compile-time stealthiness
+#if STEALTH_MODE > STEALTH_MODE_OFF //STEALTH_MODE_BASIC or above
+#define VIRTUAL_UART_THREAD_FMT "irq/%d-serial" //pattern format for vUART kernel thread which spoofs IRQ one
+#endif
+
 struct runtime_config;
 
 int initialize_stealth(void *config);

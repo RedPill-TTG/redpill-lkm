@@ -8,6 +8,7 @@ set(CMAKE_C_STANDARD 11)
 add_definitions(-DLINUX_VERSION_CODE=199273)
 include_directories(./linux-3.10.x-bromolow-25426/include)
 include_directories(./linux-3.10.x-bromolow-25426/arch/x86/include)
+add_definitions(-DCONFIG_SYNO_X86_SERIAL_PORT_SWAP)
 
 #add_definitions(-DLINUX_VERSION_CODE=263227)
 #include_directories(./linux-4.4.x-apollolake-25426/include)
@@ -759,6 +760,7 @@ add_definitions(-DCONFIG_CLZ_TAB)
 add_definitions(-DCONFIG_MPILIB)
 add_definitions(-DCONFIG_OID_REGISTRY)
 add_definitions(-DCONFIG_UCS2_STRING)
+add_definitions(-DCONFIG_SERIAL_8250_NR_UARTS=4)
 
 add_executable(redpill
-        redpill_main.c redpill_main.h internal/call_protected.c internal/call_protected.h common.h config/cmdline_delegate.c config/cmdline_delegate.h shim/boot_device_shim.c shim/boot_device_shim.h internal/stealth.c internal/stealth.h config/runtime_config.c config/runtime_config.h test.c shim/bios_shim.c shim/bios_shim.h internal/override_symbol.c internal/override_symbol.h shim/bios/bios_shims_collection.c shim/bios/bios_shims_collection.h shim/block_fw_update_shim.c shim/block_fw_update_shim.h internal/intercept_execve.c internal/intercept_execve.h shim/disable_exectutables.c shim/disable_exectutables.h debug/debug_execve.c debug/debug_execve.h compat/string_compat.c compat/string_compat.h internal/stealth/sanitize_cmdline.c internal/stealth/sanitize_cmdline.h internal/virtual_pci.c internal/virtual_pci.h shim/pci_shim.c shim/pci_shim.h shim/bios/rtc.c shim/bios/rtc.h shim/bios/rtc_proxy.c shim/bios/rtc_proxy.h internal/virtual_pmu.c internal/virtual_pmu.h internal/virtual_uart.c internal/virtual_uart.h shim/uart_fixer.c shim/uart_fixer.h)
+        redpill_main.c redpill_main.h internal/call_protected.c internal/call_protected.h common.h config/cmdline_delegate.c config/cmdline_delegate.h shim/boot_device_shim.c shim/boot_device_shim.h internal/stealth.c internal/stealth.h config/runtime_config.c config/runtime_config.h test.c shim/bios_shim.c shim/bios_shim.h internal/override_symbol.c internal/override_symbol.h shim/bios/bios_shims_collection.c shim/bios/bios_shims_collection.h shim/block_fw_update_shim.c shim/block_fw_update_shim.h internal/intercept_execve.c internal/intercept_execve.h shim/disable_exectutables.c shim/disable_exectutables.h debug/debug_execve.c debug/debug_execve.h compat/string_compat.c compat/string_compat.h internal/stealth/sanitize_cmdline.c internal/stealth/sanitize_cmdline.h internal/virtual_pci.c internal/virtual_pci.h shim/pci_shim.c shim/pci_shim.h shim/bios/rtc_proxy.c shim/bios/rtc_proxy.h shim/bios/rtc_proxy.c shim/bios/rtc_proxy.h internal/uart/virtual_uart.c internal/uart/virtual_uart.h shim/uart_fixer.c shim/uart_fixer.h internal/uart/uart_defs.h debug/debug_vuart.h internal/uart/vuart_virtual_irq.c internal/uart/vuart_virtual_irq.h internal/uart/vuart_internal.h)
