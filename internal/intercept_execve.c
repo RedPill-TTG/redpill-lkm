@@ -26,7 +26,8 @@ int add_blocked_execve_filename(const char * filename)
         }
     }
 
-    intercepted_filenames[idx] = kmalloc(sizeof(filename), GFP_KERNEL);
+    intercepted_filenames[idx] = kmalloc(strlen(filename)+1, GFP_KERNEL);
+    strcpy(intercepted_filenames[idx], filename); //Size checked above
     if (!intercepted_filenames[idx]) {
         pr_loc_crt("kmalloc failure!");
         return -ENOMEM;
@@ -49,6 +50,9 @@ static asmlinkage long shim_sys_execve(const char __user *filename,
     pr_loc_dbg("%s: %s %s", __FUNCTION__, filename, argv[0]);
 
     for (int i = 0; i < MAX_INTERCEPTED_FILES; i++) {
+        if (!intercepted_filenames[i])
+            break;
+
         if (unlikely(strcmp(filename, intercepted_filenames[i]) == 0)) {
             pr_loc_inf("Blocked %s from running", filename);
             //We cannot just return 0 here - execve() *does NOT* return on success, but replaces the current process ctx
