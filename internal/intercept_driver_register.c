@@ -90,11 +90,12 @@ static int driver_register_shim(struct device_driver *drv)
     bool driver_register_fulfilled = false;
 
     if (unlikely(!watcher_lptr)) {
-        pr_loc_dbg("%s interception active - no handler observing \"%s\" found", WATCH_FUNCTION, drv->name);
+        pr_loc_dbg("%s() interception active - no handler observing \"%s\" found, calling original %s()",
+                   WATCH_FUNCTION, drv->name, WATCH_FUNCTION);
         return call_original_driver_register(drv);
     }
 
-    pr_loc_dbg("%s interception active - calling handler %pF<%p> for \"%s\"", WATCH_FUNCTION, (*watcher_lptr)->cb,
+    pr_loc_dbg("%s() interception active - calling handler %pF<%p> for \"%s\"", WATCH_FUNCTION, (*watcher_lptr)->cb,
                (*watcher_lptr)->cb, drv->name);
 
     if ((*watcher_lptr)->notify_coming) {
@@ -164,7 +165,7 @@ static int start_watching(void)
         ov_driver_register = NULL;
         return -EINVAL;
     }
-    pr_loc_dbg("Intercepted %s()", WATCH_FUNCTION);
+    pr_loc_dbg("%s() is now intercepted", WATCH_FUNCTION);
 
     return 0;
 }
@@ -211,7 +212,7 @@ driver_watcher_instance *watch_driver_register(const char *name, watch_dr_callba
     (*watcher_lptr)->cb = cb;
     (*watcher_lptr)->notify_coming = ((event_mask & DWATCH_STATE_COMING) == DWATCH_STATE_COMING);
     (*watcher_lptr)->notify_live = ((event_mask & DWATCH_STATE_LIVE) == DWATCH_STATE_LIVE);
-    pr_loc_dbg("Registered driver_register watcher for %s (coming=%d, live=%d)", name,
+    pr_loc_dbg("Registered %s() watcher for \"%s\" driver (coming=%d, live=%d)", WATCH_FUNCTION, name,
                (*watcher_lptr)->notify_coming ? 1 : 0, (*watcher_lptr)->notify_live ? 1 : 0);
 
     if (!ov_driver_register) {
@@ -228,6 +229,8 @@ int unwatch_driver_register(driver_watcher_instance *instance)
 {
     driver_watcher_instance **matched_lptr = match_watcher(instance->name);
     if (unlikely(!matched_lptr)) {
+        //This means it could be a double-unwatch situation and this will prevent a double-kfree (but the lack of crash
+        // is not guaranteed as match_watcher() already touched the memory)
         pr_loc_bug("Watcher %p for %s couldn't be found in the watchers list", instance, instance->name);
         return -ENOENT;
     }
@@ -238,13 +241,13 @@ int unwatch_driver_register(driver_watcher_instance *instance)
         return -EINVAL;
     }
 
-    pr_loc_dbg("Removed %pF<%p> watcher for %s driver", (*matched_lptr)->cb, (*matched_lptr)->cb,
+    pr_loc_dbg("Removed %pF<%p> subscriber for \"%s\" driver", (*matched_lptr)->cb, (*matched_lptr)->cb,
                (*matched_lptr)->name);
     kfree(*matched_lptr);
     *matched_lptr = NULL;
 
     if (!has_any_watchers()) {
-        pr_loc_dbg("Removed last driver_register watcher - stopping watching");
+        pr_loc_dbg("Removed last %s() subscriber - unshimming %s()", WATCH_FUNCTION, WATCH_FUNCTION);
         int out;
         if ((out = stop_watching()) != 0)
             return out;

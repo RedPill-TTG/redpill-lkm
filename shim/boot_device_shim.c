@@ -14,6 +14,7 @@
  *      - it must have VID/PID combo of 0xf401/0xf401
  *      - always triggers OS install/repair screen
  *  3) SATA DOM (Disk-on-Module)
+ *      - kernel is compiled with SATA DOM support (NATIVE_SATA_DOM_SUPPORTED => CONFIG_SYNO_BOOT_SATA_DOM)
  *      - is a real SATA (i.e. not SCSI/iSCSI/VirtIO) device
  *      - has platform dependent vendor/model strings of CONFIG_SYNO_SATA_DOM_VENDOR/CONFIG_SYNO_SATA_DOM_MODEL
  *      - has platform dependent vendor/model strings of CONFIG_SYNO_SATA_DOM_VENDOR_SECOND_SRC/CONFIG_SYNO_SATA_DOM_MODEL_SECOND_SRC
@@ -28,7 +29,7 @@
  * References:
  *  - See drivers/scsi/sd.c in Linux sources (especially sd_probe() method)
  */
-#define SHIM_NAME "boot device"
+#define SHIM_NAME "boot device router"
 
 #include "boot_device_shim.h"
 #include "shim_base.h"

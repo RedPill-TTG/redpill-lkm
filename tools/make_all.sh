@@ -33,8 +33,9 @@ make LINUX_SRC="$LINUX_SRC_ROOT/apollolake-DS-7.0-toolkit/build" -j
 cp redpill.ko "$RP_LOAD_ROOT/ext/rp-lkm/redpill-linux-v4.4.180+.ko"
 cp redpill.ko redpill-v7-918.bin
 
-
 ln -s redpill-v6-3615.bin redpill-v6-3615.ko
 ln -s redpill-v7-3615.bin redpill-v7-3615.ko
 ln -s redpill-v6-918.bin redpill-v6-918.ko
 ln -s redpill-v7-918.bin redpill-v7-918.ko
+
+echo "OK"

@@ -109,7 +109,7 @@ static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
         ({code});                                                      \
         spin_unlock_irqrestore(&(__sym)->lock, (__sym)->lock_irq);     \
         pr_loc_dbg("Released lock for <%p>", (__sym)->org_sym_ptr);    \
-    } while(0);
+    } while(0)
 
 struct override_symbol_inst {
     void *org_sym_ptr;
@@ -262,7 +262,7 @@ struct override_symbol_inst* __must_check override_symbol(const char *name, cons
 
     set_symbol_rw(sym); //by design standard override leaves the memory protected
 
-    pr_loc_dbg("Successfully overrode %s with trampoline to %pF<%p>", sym->name, sym->new_sym_ptr, sym->new_sym_ptr);
+    pr_loc_dbg("Successfully overrode %s() with trampoline to %pF<%p>", sym->name, sym->new_sym_ptr, sym->new_sym_ptr);
     return sym;
 
     error_out:

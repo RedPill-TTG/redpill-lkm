@@ -61,7 +61,7 @@
  * THE FINAL PICTURE
  * Ok, it is pretty complex indeed. Here's the decision tree this submodule goes through:
  *  register_sata_boot_shim()
- *   => find_driver("sd", ...)
+ *   => driver_find("sd", ...)
  *      ===FOUND===
  *        + shim sd_probe() to sd_probe_shim()
  *            <will shim vendor/model if appropriate for every newly plugged/re-plugged device>
@@ -580,13 +580,13 @@ int unregister_sata_boot_shim(void)
 #else //ifdef NATIVE_SATA_DOM_SUPPORTED
 int register_sata_boot_shim(const struct boot_media *boot_dev_config)
 {
-    pr_loc_err("SATA boot shim cannot be registered in a kernel built without SATA DoM support");
+    pr_loc_err("Native SATA boot shim cannot be registered in a kernel built without SATA DoM support");
     return -ENODEV;
 }
 
 int unregister_sata_boot_shim(void)
 {
-    pr_loc_err("SATA boot shim cannot be unregistered in a kernel built without SATA DoM support");
+    pr_loc_err("Native SATA boot shim cannot be unregistered in a kernel built without SATA DoM support");
     return -ENODEV;
 }
 #endif //ifdef else NATIVE_SATA_DOM_SUPPORTED

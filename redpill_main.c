@@ -13,6 +13,9 @@
 #include "shim/pmu_shim.h" //Emulates the platform management unit
 
 //Handle versioning stuff
+#ifndef RP_VERSION_POSTFIX
+#define RP_VERSION_POSTFIX "(NULL)"
+#endif
 #define RP_VERSION_MAJOR 0
 #define RP_VERSION_MINOR 5
 #define STRINGIFY(x) #x
@@ -90,10 +93,10 @@ static void __exit cleanup_(void)
 
     int out;
     for (int i = 0; i < ARRAY_SIZE(cleanup_handlers); i++) {
-        pr_loc_dbg("Calling cleanup handler %p", cleanup_handlers[i]);
+        pr_loc_dbg("Calling cleanup handler %pF<%p>", cleanup_handlers[i], cleanup_handlers[i]);
         out = cleanup_handlers[i]();
         if (out != 0)
-            pr_loc_wrn("Cleanup handler %p failed with code=%d", cleanup_handlers[i], out);
+            pr_loc_wrn("Cleanup handler %pF failed with code=%d", cleanup_handlers[i], out);
     }
 
     free_runtime_config(&current_config); //A special snowflake ;)

@@ -104,6 +104,8 @@ static asmlinkage long shim_sys_execve(const char __user *filename,
 
 int register_execve_interceptor()
 {
+    pr_loc_dbg("Registering execve() interceptor");
+
     int out = override_syscall(__NR_execve, shim_sys_execve, (void *)&org_sys_execve);
     if (out != 0)
         return out;
@@ -114,6 +116,8 @@ int register_execve_interceptor()
 
 int unregister_execve_interceptor()
 {
+    pr_loc_dbg("Unregistering execve() interceptor");
+
     int out = restore_syscall(__NR_execve);
     if (out != 0)
         return out;

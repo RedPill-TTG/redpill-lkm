@@ -6,7 +6,7 @@
         set_mem_addr_rw((unsigned long)(vaddr), size); \
         ({code});                                      \
         set_mem_addr_ro((unsigned long)(vaddr), size); \
-    } while(0);
+    } while(0)
 
 /**
  * Disables write-protection for the memory where symbol resides
