@@ -3,13 +3,16 @@
 
 /******************************************** Available whole-module flags ********************************************/
 //This (shameful) flag disables shims which cannot be properly unloaded to make debugging of other things easier
-#define DBG_DISABLE_UNLOADABLE
+//#define DBG_DISABLE_UNLOADABLE
 
 //disabled uart unswapping even if needed (useful for hand-loading while running)
-#define DBG_DISABLE_UART_SWAP_FIX
+//#define DBG_DISABLE_UART_SWAP_FIX
 
 //Whether to cause a kernel panic when module fails to load internally (which should be normally done on production)
 #define KP_ON_LOAD_ERROR
+
+//Print A LOT of vUART debug messages
+//#define VUART_DEBUG_LOG
 /**********************************************************************************************************************/
 
 #include "internal/stealth.h"
