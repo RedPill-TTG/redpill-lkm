@@ -1,8 +1,8 @@
 #include "uart_fixer.h"
 #include "../common.h"
-#include "../../config/runtime_config.h" //hw_config
-#include "../../internal/call_protected.h" //early_serial_setup(), update_console_cmdline()
-#include "../../internal/uart/uart_defs.h" //struct uart_port, COM ports definition
+#include "../config/runtime_config.h" //hw_config
+#include "../internal/call_protected.h" //early_serial_setup(), update_console_cmdline()
+#include "../internal/uart/uart_defs.h" //struct uart_port, COM ports definition
 #include <linux/serial_8250.h> //serial8250_unregister_port
 #include <linux/console.h> //console_lock(), console_unlock()
 #include <linux/sched.h> //for_each_process, kill_pgrp
