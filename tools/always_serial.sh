@@ -12,8 +12,13 @@ trap_cancel() {
 }
 trap trap_cancel SIGINT SIGTERM
 
+if [[ "$#" -ne 2 ]]; then
+  echo "Usage: $0 <VM_ID> <SERIAL_0-3>"
+  exit 2
+fi
+
 while true; do
  clear
- echo "Started at" $(date)
+ echo "Started serial$2 monitor for VM=$1 at" $(date)
  qm terminal $1 -iface serial$2
 done
