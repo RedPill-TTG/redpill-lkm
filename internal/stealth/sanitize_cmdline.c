@@ -97,6 +97,75 @@ static int filtrate_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMD
     return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
+/**
+ * This function has been copied verbatim from fs/proc/generic.c:proc_match()
+ *
+ * Copyright (C) 1991, 1992 Linus Torvalds.
+ * Copyright (C) 1997 Theodore Ts'o
+ */
+static int proc_match(unsigned int len, const char *name, struct proc_dir_entry *de)
+{
+    if (len < de->namelen)
+        return -1;
+    if (len > de->namelen)
+        return 1;
+
+    return memcmp(name, de->name, len);
+}
+
+/**
+ * Find a correct proc entry in the red-black tree. This is used since Linux v3.19 instead of a linked list:
+ *  https://github.com/torvalds/linux/commit/710585d4922fd315f2cada8fbe550ae8ed23e994
+ *
+ * This is a modified version of fs/proc/generic.c:pde_subdir_find()
+ *
+ * Copyright (C) 1991, 1992 Linus Torvalds.
+ * Copyright (C) 1997 Theodore Ts'o
+ *
+ * @param dir Pass the DIRECTORY to search in
+ */
+static struct proc_dir_entry *pde_find(struct proc_dir_entry *dir, const char *name)
+{
+    struct rb_node *node = dir->subdir.rb_node;
+    u8 len = strlen(name);
+
+    while (node) {
+        struct proc_dir_entry *de = container_of(node, struct proc_dir_entry, subdir_node);
+        int result = proc_match(len, name, de);
+
+        if (result < 0)
+            node = node->rb_left;
+        else if (result > 0)
+            node = node->rb_right;
+        else
+            return de;
+    }
+
+    return NULL;
+}
+#else
+/**
+ * Kernels till 3.19 use a simple linked list to store proc entries. This will find the correct one
+ *
+ * @param dir Pass the ENTRY IN A DIRECTORY to search in such directory
+ *
+ * @todo This can probably be improved to work like pde_find for >3.19 (i.e. take a directory and not entry)
+ */
+static inline struct proc_dir_entry *pde_find(struct proc_dir_entry *proc_entry, const char *name)
+{
+    u8 name_len = strlen(name);
+
+    for (proc_entry = proc_entry->subdir; proc_entry; proc_entry = proc_entry->next) {
+        if (unlikely(proc_entry->namelen == name_len) &&
+            strncmp(proc_entry->name, "cmdline", sizeof_str_chunk("cmdline")) == 0)
+            return proc_entry;
+    }
+
+    return NULL;
+}
+#endif
+
 /**
  * Located directory entry structure for the original /proc/cmdline
  *
@@ -104,23 +173,18 @@ static int filtrate_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMD
  * outside. However, we can create a dummy entry in /proc/__dummy__ to get parent (which will point to /proc) and then
  * find the one for /proc/cmdline
  *
+ * This function calls version-dependant pde_find(). See the preprocessor "if" above
+ *
  * @return pointer to original cmdline dentry or error pointer if it cannot be found (should never happen)
  */
 static struct proc_dir_entry *locate_proc_cmdline(void)
 {
     const struct file_operations dummy_proc_fops = { NULL };
-
-    struct proc_dir_entry *proc_entry = proc_create("__dummy__", 0, NULL, &dummy_proc_fops);
-    while (proc_entry = proc_entry->next, proc_entry) {
-        if (unlikely(proc_entry->namelen == sizeof_str_chunk("cmdline")) &&
-            strncmp(proc_entry->name, "cmdline", sizeof_str_chunk("cmdline")) == 0)
-            goto out_clean;
-    }
-    proc_entry = ERR_PTR(-ENOENT); //this is skipped when while() goto-s to out_clean with entry pre-set
-
-    out_clean:
+    struct proc_dir_entry *proc_dummy_entry = proc_create("__dummy__", 0, NULL, &dummy_proc_fops);
+    struct proc_dir_entry *proc_cmdline = pde_find(proc_dummy_entry->parent, "cmdline");
     remove_proc_entry("__dummy__", NULL);
-    return proc_entry;
+
+    return proc_cmdline ? proc_cmdline : ERR_PTR(-ENOENT);
 }
 
 /**
