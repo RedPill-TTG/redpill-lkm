@@ -10,8 +10,9 @@ ccflags-$(DBG_EXECVE) += -DRPDBG_EXECVE
 SRCS-y  += compat/string_compat.c \
 		   \
 		   internal/override_symbol.c internal/intercept_execve.c internal/call_protected.c \
-		   internal/stealth/sanitize_cmdline.c internal/stealth.c internal/virtual_pci.c \
-		   internal/uart/uart_swapper.c internal/uart/vuart_virtual_irq.c internal/uart/virtual_uart.c \
+		   internal/intercept_driver_register.c internal/stealth/sanitize_cmdline.c internal/stealth.c \
+		   internal/virtual_pci.c internal/uart/uart_swapper.c internal/uart/vuart_virtual_irq.c \
+		   internal/uart/virtual_uart.c \
 		   \
 		   config/cmdline_delegate.c config/runtime_config.c \
 		   \
