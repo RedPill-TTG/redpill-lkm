@@ -4,10 +4,12 @@
 #include <linux/types.h> //bool
 #include <linux/module.h> //struct module
 
+
+typedef struct hw_config hw_config_bios_shim_col;
 /**
  * Insert all the shims to the mfgBIOS
  */
-bool shim_bios(struct module *mod, unsigned long *vtable_start, unsigned long *vtable_end);
+bool shim_bios(const hw_config_bios_shim_col *hw, struct module *mod, unsigned long *vtable_start, unsigned long *vtable_end);
 
 /**
  * Removes all shims from the mfgBIOS

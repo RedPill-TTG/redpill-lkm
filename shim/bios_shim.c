@@ -55,6 +55,7 @@ static bool bios_shimmed = false;
 static bool module_notify_registered = false;
 static unsigned long *vtable_start = NULL;
 static unsigned long *vtable_end = NULL;
+static const hw_config_bios_shim *hw_config = NULL;
 static inline int enable_symbols_capture(void);
 static inline int disable_symbols_capture(void);
 
@@ -97,18 +98,26 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
         return NOTIFY_OK;
     }
 
-    //We shouldn't react to MODULE_STATE_LIVE multiple times (can it happen? hmm...) nor do anything before init
-    // of the module finished changing the vtable
-    if (bios_shimmed || state != MODULE_STATE_LIVE)
+    if (bios_shimmed)
         return NOTIFY_OK;
 
-    bios_shimmed = true; //Make sure we flag it first before anything to avoid potential race condition
-    if (!shim_bios(mod, vtable_start, vtable_end)) {
+    //So, this is really tricky actually. Some parts of the vtable are populated AND USED during init and some are
+    // populated in init but used later. This means we need to try to shim twice - as fast as possible after init call
+    // and just after init call finished.
+
+    //We shouldn't react to MODULE_STATE_LIVE multiple times (can it happen? hmm...) nor do anything before init
+    // of the module finished changing the vtable
+    if (!shim_bios(hw_config, mod, vtable_start, vtable_end)) {
         bios_shimmed = false;
         return NOTIFY_OK;
     }
 
-    pr_loc_inf("%s BIOS shimmed", mod->name);
+    if (state == MODULE_STATE_LIVE) {
+        bios_shimmed = true;
+        pr_loc_inf("%s BIOS *fully* shimmed", mod->name);
+    } else {
+        pr_loc_inf("%s BIOS *early* shimmed", mod->name);
+    }
 
     return NOTIFY_OK;
 }
@@ -214,9 +223,10 @@ static void process_bios_symbols(Elf64_Shdr *sechdrs, const char *strtab, unsign
     disable_symbols_capture();
 }
 
-int register_bios_shim(void)
+int register_bios_shim(const hw_config_bios_shim *hw)
 {
     int out;
+    hw_config = hw;
 
     out = enable_symbols_capture();
     if (out != 0)
@@ -248,6 +258,7 @@ int unregister_bios_shim(void)
     if (unlikely(out != 0))
         return out;
 
+    hw_config = NULL;
     pr_loc_inf("mfgBIOS shim unregistered");
 
     return 0;

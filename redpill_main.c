@@ -28,7 +28,7 @@ static int __init init_redpill(void)
          || (out = populate_runtime_config(&current_config)) != 0 //This MUST be second
          || (out = register_boot_shim(&current_config.boot_media, &current_config.mfg_mode)) //Make sure we're quick with this one
          || (out = register_execve_interceptor()) != 0 //Register this reasonably high as other modules can use it blindly
-         || (out = register_bios_shim()) != 0
+         || (out = register_bios_shim(current_config.hw_config)) != 0
          || (out = disable_common_executables()) != 0
          || (out = register_fw_update_shim()) != 0
 #ifndef DISABLE_UNLOADABLE
