@@ -106,4 +106,13 @@
 #endif //STEALTH_MODE
 /**********************************************************************************************************************/
 
+#ifndef RP_MODULE_TARGET_VER
+#error "The RP_MODULE_TARGET_VER is not defined - it is required to properly set VTKs"
+#endif
+
+//Before you change that you need to go and check all usages of RP_MODULE_TARGET_VER
+#if RP_MODULE_TARGET_VER != 6 && RP_MODULE_TARGET_VER != 7
+#error "The RP_MODULE_TARGET_VER value is invalid"
+#endif
+
 #endif //REDPILLLKM_COMMON_H

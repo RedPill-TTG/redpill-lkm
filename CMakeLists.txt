@@ -21,6 +21,9 @@ add_definitions(-DCONFIG_SYNO_X86_SERIAL_PORT_SWAP)
 # Custom options in our makefile
 add_definitions(-DDBG_EXECVE)
 
+# RP custom definitions
+add_definitions(-DRP_MODULE_TARGET_VER=6)
+
 # Generic options
 add_definitions(-D__KERNEL__)
 add_definitions(-DMODULE)

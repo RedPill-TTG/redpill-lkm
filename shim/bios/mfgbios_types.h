@@ -1,10 +1,43 @@
 /*
  * This file contains structures/types used for compatibility with the mfg bios
  *
- * These are not original types used by the mfg BIOS, but rather recreations from available documentation.
+ * These are not original types used by the mfg BIOS, but rather recreations from available documentation unless
+ * available in GPLed source (in which case they're #include'd)
  */
 #ifndef REDPILL_SYNOBIOS_COMPAT_H
 #define REDPILL_SYNOBIOS_COMPAT_H
+
+#include <linux/synobios.h> //SYNO_* & SYNO* types
+
+//Missing HWMON types... only in some toolchains
+#ifndef HWMON_PSU_SENSOR_TEMP1
+#define HWMON_PSU_SENSOR_TEMP1 "temperature_1"
+#endif
+#ifndef HWMON_PSU_SENSOR_TEMP2
+#define HWMON_PSU_SENSOR_TEMP2 "temperature_2"
+#endif
+#ifndef HWMON_PSU_SENSOR_TEMP3
+#define HWMON_PSU_SENSOR_TEMP3 "temperature_3"
+#endif
+#ifndef HWMON_PSU_SENSOR_FAN_VOLT
+#define HWMON_PSU_SENSOR_FAN_VOLT "fan_voltage"
+#endif
+
+//These aren't defined in synobios.h (while sensors from other categories are... go figure)
+#define HWMON_SYS_TZONE_REMOTE1_NAME  "Remote1"
+#define HWMON_SYS_TZONE_REMOTE2_NAME  "Remote2"
+#define HWMON_SYS_TZONE_LOCAL_NAME    "Local"
+#define HWMON_SYS_TZONE_SYSTEM_NAME   "system"
+#define HWMON_SYS_TZONE_ADT1_LOC_NAME "ADT1 Local"
+#define HWMON_SYS_TZONE_ADT2_LOC_NAME "ADT2 Local"
+#define HWMON_SYS_VSENS_VCC_NAME      "VCC"
+#define HWMON_SYS_VSENS_VPP_NAME      "VPP"
+#define HWMON_SYS_VSENS_V33_NAME      "V33"
+#define HWMON_SYS_VSENS_V5_NAME       "V5"
+#define HWMON_SYS_VSENS_V12_NAME      "V12"
+#define HWMON_SYS_VSENS_ADT1_V33_NAME "ADT1 V33"
+#define HWMON_SYS_VSENS_ADT2_V33_NAME "ADT2 V33"
+#define HWMON_SYS_CURR_ADC_NAME       "ADC"
 
 struct MfgCompatTime {
     unsigned char second;
@@ -59,28 +92,9 @@ enum MfgCompatFanSpeed {
     MFGC_FAN_SPD_PWM = 1000
 };
 
-struct MfgCompatTemp {
-    unsigned char where;
-    int value;
-};
-
-struct MfgCompatCpuTemp {
-    unsigned char where;
-    int cpu_idx;
-    int value[2]; //2 cpus probably
-};
-
-enum MfgCompatHddLedState {
-    MFGC_HDD_LED_OFF,
-    MFGC_HDD_LED_GREEN_LIT,
-    MFGC_HDD_LED_ORANGE_LIT,
-    MFGC_HDD_LED_ORANGE_BLINK,
-    MFGC_HDD_LED_GREEN_BLINK,
-};
-
 struct MfgCompatHddLedStatus {
     int hdd_no;
-    enum MfgCompatHddLedState state;
+    SYNO_DISK_LED state;
     int pos_name_len; //includes null terminator
     char *pos_name;
 };
@@ -172,13 +186,13 @@ typedef int (*mfgc_void_cb)(void); //int f(void)
 typedef int (*mfgc_time_cb)(struct MfgCompatTime *); //int f(MfgCompatTime *)
 typedef int (*mfgc_get_fan_state_cb)(int, enum MfgCompatFanStatus *); //int f(int, MfgCompatFanStatus *)
 typedef int (*mfgc_set_fan_state_cb)(enum MfgCompatFanStatus, enum MfgCompatFanSpeed); //int f(MfgCompatFanStatus, MfgCompatFanSpeed)
-typedef int (*mfgc_temp_cb)(struct MfgCompatTemp *); //int f(MfgCompatTemp *)
+typedef int (*mfgc_hwmon_sensor_cb)(SYNO_HWMON_SENSOR_TYPE *); //int f(SYNO_HWMON_SENSOR_TYPE *)
 //TODO: this list is not complete - add all callback types
 
 #ifdef CONFIG_SYNO_PORT_MAPPING_V2
 typedef int (*mfgc_set_hdd_led_cb)(struct MfgCompatHddLedStatus *status);
 #else
-typedef int (*mfgc_set_hdd_led_cb)(int, enum MfgCompatHddLedState state); //int f(void)
+typedef int (*mfgc_set_hdd_led_cb)(int, SYNO_DISK_LED state); //int f(void)
 #endif
 
 //List of known indexes in the mfgBIOS vtable. The table can be recovered by shim/bios_shim.c. Some of its entries are
@@ -195,8 +209,8 @@ typedef int (*mfgc_set_hdd_led_cb)(int, enum MfgCompatHddLedState state); //int 
 #define VTK_RTC_SET_TIME         5 //Sig: int f(MfgCompatTime *)
 #define VTK_GET_FAN_STATE        6 //Sig: int f(int, MfgCompatFanStatus *) | present in: DS918+; not: DS3615xs
 #define VTK_SET_FAN_STATE        7 //Sig: int f(MfgCompatFanStatus, MfgCompatFanSpeed)
-#define VTK_GET_SYS_TEMP         8 //Sig: int f(MfgCompatTemp *) | present in: DS3615xs; not: DS918+
-#define VTK_GET_CPU_TEMP         9 //Sig: int f(MfgCompatCpuTemp *)
+#define VTK_GET_SYS_TEMP         8 //Sig: int f(SYNO_THERMAL_TEMP *) | present in: DS3615xs; not: DS918+
+#define VTK_GET_CPU_TEMP         9 //Sig: int f(SYNOCPUTEMP *)
 #define VTK_SET_DISK_LED        10 //Sig: varies, see mfgc_set_hdd_led_cb type
 #define VTK_SET_PWR_LED         11 //Sig: int f(MfgCompatGenericLedState)
 #define VTK_GET_CPLD_REG        12 //Sig: int f(MfgCompatCPLDReg *)
@@ -230,14 +244,28 @@ typedef int (*mfgc_set_hdd_led_cb)(int, enum MfgCompatHddLedState state); //int 
 #define VTK_GET_CPU_INF         40 //Sig: void f(MfgCompatCPUState*, uint)
 #define VTK_SET_HA_LED          41 //present in: RC18015xs+ (and other HA units? don't have other); not: DS3615xs,DS918+
 #define VTK_GET_CPY_BTN         42 //Sig: MfgCompatCopyBtnState f(void) | present in: DS718+
-#define VTK_GET_FAN_RPM         43
-#define VTK_GET_PSU_STATE       44
-#define VTK_GET_VOLTAGE         45
-#define VTK_GET_BKPLANE_STATE   46
-#define VTK_GET_THERMAL         47
-#define VTK_GET_CURRENT         48
-#define VTK_SET_SAFE_REMOVE_LED 49 //Sig: int f(bool) | present in: DS3615xs; not: DS918+
-#define VTK_GET_CURRENT2        50
+
+#if RP_MODULE_TARGET_VER == 6
+#define VTK_SET_SAFE_REMOVE_LED       43 //Sig: int f(bool) | present in: DS3615xs; not: DS918+
+#define VTK_GET_SYS_CURRENT           44 //Sig: int f(SYNO_DISK_INTF_INFO *)
+#define VTK_GET_HWMON_FAN_RPM         45 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_PSU_STATUS      46 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_VOLTAGE         47 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_HDD_BKPLANE     48 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_THERMAL         49 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_CURRENT         50 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+
+#elif RP_MODULE_TARGET_VER == 7 //moved VTK_SET_SAFE_REMOVE_LED and VTK_GET_SYS_CURRENT below HWMON_ stuff (sic!)
+#define VTK_GET_HWMON_FAN_RPM         43 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_PSU_STATUS      44 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_VOLTAGE         45 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_HDD_BKPLANE     46 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_THERMAL         47 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_GET_HWMON_CURRENT         48 //Sig: int f(SYNO_HWMON_SENSOR_TYPE *)
+#define VTK_SET_SAFE_REMOVE_LED       49 //Sig: int f(bool) | present in: DS3615xs; not: DS918+
+#define VTK_GET_SYS_CURRENT           50 //Sig: int f(SYNO_DISK_INTF_INFO *)
+#endif //RP_MODULE_TARGET_VER
+
 #define VTK_GET_HDD_IFACE       51
 
 #define VTK_SIZE 52

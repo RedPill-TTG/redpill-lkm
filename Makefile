@@ -46,8 +46,9 @@ ifdef RP_MODULE_TARGET
 ccflags-dev = -g -fno-inline -DDEBUG
 ccflags-test = -O3
 ccflags-prod = -O3
+ccflags-y += -DRP_MODULE_TARGET_VER=${RP_MODULE_TARGET_VER} # this is assumed to be defined when target is specified
 
-$(info RP-TARGET SPECIFIED AS ${RP_MODULE_TARGET})
+$(info RP-TARGET SPECIFIED AS ${RP_MODULE_TARGET} v${RP_MODULE_TARGET_VER})
 
 # stealth mode can always be overridden but there are sane per-target defaults (see above)
 ifneq ($(STEALTH_MODE),)
@@ -72,11 +73,24 @@ endif
 CFLAGS_scsi_notifier_list.o += -std=gnu89
 
 # do NOT move this target - make <3.80 doesn't have a way to specify default target and takes the first one found
-dev: # all symbols included, debug messages included
-	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="dev" modules
-test: # fully stripped with only warning & above (no debugs or info)
-	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="test" modules
-prod: # fully stripped with no debug messages
-	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="prod" modules
+default_error:
+	$(error You need to specify one of the following targets: dev-v6, dev-v7, test-v6, test-v7, prod-v6, prod-v7, clean)
+
+# All v6 targets
+dev-v6: # kernel running in v6.2+ OS, all symbols included, debug messages included
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="dev" RP_MODULE_TARGET_VER="6" modules
+test-v6: # kernel running in v6.2+ OS, fully stripped with only warning & above (no debugs or info)
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="test" RP_MODULE_TARGET_VER="6" modules
+prod-v6: # kernel running in v6.2+ OS, fully stripped with no debug messages
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="prod" RP_MODULE_TARGET_VER="6" modules
+
+# All v7 targets
+dev-v7: # kernel running in v6.2+ OS, all symbols included, debug messages included
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="dev" RP_MODULE_TARGET_VER="7" modules
+test-v7: # kernel running in v6.2+ OS, fully stripped with only warning & above (no debugs or info)
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="test" RP_MODULE_TARGET_VER="7" modules
+prod-v7: # kernel running in v6.2+ OS, fully stripped with no debug messages
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="prod" RP_MODULE_TARGET_VER="7" modules
+
 clean:
 	$(MAKE) -C $(LINUX_SRC) M=$(PWD) clean
