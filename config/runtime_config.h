@@ -6,6 +6,8 @@
 #define MAX_NET_IFACES 8
 #define MAC_ADDR_LEN 12
 #define MAX_BLACKLISTED_CMDLINE_TOKENS 10
+#define MAX_VPCI_BUSES 8 //adjust if needed, max 256
+#define MAX_VPCI_DEVS 16 //adjust if needed, max 256*32=8192
 
 #define VID_PID_EMPTY 0x0000
 #define VID_PID_MAX   0xFFFF

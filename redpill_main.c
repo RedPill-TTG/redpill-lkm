@@ -8,6 +8,10 @@
 #include "shim/bios_shim.h" //Shimming various mfgBIOS functions to make them happy
 #include "shim/block_fw_update_shim.h" //Prevent firmware update from running
 #include "shim/disable_exectutables.h" //Disable common problematic executables
+#include "shim/pci_shim.h" //Handles PCI devices emulation
+
+//This (shameful) flag disables shims which cannot be properly unloaded to make debugging of other things easier
+//#define DISABLE_UNLOADABLE
 
 static int __init init_redpill(void)
 {
@@ -33,6 +37,9 @@ static int __init init_redpill(void)
          || (error = register_bios_shim()) != 0
          || (error = disable_common_executables()) != 0
          || (error = register_fw_update_shim()) != 0
+#ifndef DISABLE_UNLOADABLE
+         || (error = register_pci_shim()) != 0
+#endif
 
          //This one should be done really late so that if it does hide something it's not hidden from us
          || (error = initialize_stealth(&current_config)) != 0
@@ -56,6 +63,9 @@ static void __exit cleanup_redpill(void)
     pr_loc_inf("RedPill unloading...");
 
     uninitialize_stealth();
+#ifndef DISABLE_UNLOADABLE
+    unregister_pci_shim();
+#endif
     unregister_fw_update_shim();
     unregister_bios_shim();
     unregister_execve_interceptor();
