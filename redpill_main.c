@@ -14,8 +14,8 @@
 //This (shameful) flag disables shims which cannot be properly unloaded to make debugging of other things easier
 //#define DISABLE_UNLOADABLE
 
-//Whether to cause a BUG() when module failes to load internally (which should be normally done on production)
-//#define BUG_ON_LOAD_ERROR
+//Whether to cause a BUG() when module fails to load internally (which should be normally done on production)
+#define BUG_ON_LOAD_ERROR
 
 static int __init init_redpill(void)
 {
@@ -47,7 +47,7 @@ static int __init init_redpill(void)
     error_out:
         pr_loc_crt("RedPill cannot be loaded, error=%d", out);
 #ifdef BUG_ON_LOAD_ERROR
-        BUG()
+        BUG();
 #else
         return out;
 #endif
