@@ -48,21 +48,29 @@ static void cmd_shim_noop(const command_definition *t, const char *data, u8 data
 #define PMU_CMD__MIN_CODE 0x30
 #define PMU_CMD__MAX_CODE 0x75
 #define single_byte_idx(id) ((id)-PMU_CMD__MIN_CODE)
-#define get_single_byte_cmd(id) single_byte_cmds[single_byte_idx(id)]
-#define has_single_byte_cmd(id) (get_single_byte_cmd(id).length != 0)
+#define get_single_byte_cmd(id) single_byte_cmds[single_byte_idx(id)] //call it ONLY after has_single_byte_cmd!!!
+#define has_single_byte_cmd(id) \
+    (likely((id) >= PMU_CMD__MIN_CODE) && likely((id) <= PMU_CMD__MAX_CODE) && get_single_byte_cmd(id).length != 0)
 #define DEFINE_SINGLE_BYTE_CMD(cnm, fp) [single_byte_idx(PMU_CMD_ ## cnm)] = { .name = #cnm, .length = 1, .fn = fp }
 
+#define PMU_CMD_OUT_HW_POWER_OFF 0x31 //"1"
 #define PMU_CMD_OUT_BUZ_SHORT 0x32 //"2"
 #define PMU_CMD_OUT_BUZ_LONG 0x33 //"3"
 #define PMU_CMD_OUT_PWR_LED_ON 0x34 //"4"
 #define PMU_CMD_OUT_PWR_LED_BLINK 0x35 //"5"
 #define PMU_CMD_OUT_PWR_LED_OFF 0x36 //"6"
-//0x38-3B unknown purpose
-#define PMU_CMD_OUT_HDD_LED_PULSE 0x3d //"="
-//0x3F unknown
+#define PMU_CMD_OUT_STATUS_LED_OFF 0x37 //"7"
+#define PMU_CMD_OUT_STATUS_LED_ON_GREEN 0x38 //"8"
+#define PMU_CMD_OUT_STATUS_LED_PULSE_GREEN 0x39 //"9"
+#define PMU_CMD_OUT_STATUS_LED_ON_ORANGE 0x3A //":"
+#define PMU_CMD_OUT_STATUS_LED_PULSE_ORANGE 0x3B //";"
+//0x3C unknown (possibly not used)
+#define PMU_CMD_OUT_STATUS_LED_PULSE 0x3d //"="
+//0x3E-3F unknown (possibly not used)
 #define PMU_CMD_OUT_USB_LED_ON 0x40 //"@"
 #define PMU_CMD_OUT_USB_LED_PULSE 0x41 //"A"
 #define PMU_CMD_OUT_USB_LED_OFF 0x42 //"B"
+#define PMU_CMD_OUT_HW_RESET 0x43 //"C"
 //0x43-4A unknown
 #define PMU_CMD_OUT_10G_LED_ON 0x4a //"J"
 #define PMU_CMD_OUT_10G_LED_OFF 0x4b //"K"
@@ -84,15 +92,22 @@ static void cmd_shim_noop(const command_definition *t, const char *data, u8 data
 #define PMU_CMD_OUT_FAN_HEALTH_ON 0x75 //"u"
 
 static const command_definition single_byte_cmds[single_byte_idx(PMU_CMD__MAX_CODE)+1] = {
+    DEFINE_SINGLE_BYTE_CMD(OUT_HW_POWER_OFF, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_BUZ_SHORT, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_BUZ_LONG, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_PWR_LED_ON, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_PWR_LED_BLINK, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_PWR_LED_OFF, cmd_shim_noop),
-    DEFINE_SINGLE_BYTE_CMD(OUT_HDD_LED_PULSE, cmd_shim_noop),
+    DEFINE_SINGLE_BYTE_CMD(OUT_STATUS_LED_OFF, cmd_shim_noop),
+    DEFINE_SINGLE_BYTE_CMD(OUT_STATUS_LED_ON_GREEN, cmd_shim_noop),
+    DEFINE_SINGLE_BYTE_CMD(OUT_STATUS_LED_PULSE_GREEN, cmd_shim_noop),
+    DEFINE_SINGLE_BYTE_CMD(OUT_STATUS_LED_ON_ORANGE, cmd_shim_noop),
+    DEFINE_SINGLE_BYTE_CMD(OUT_STATUS_LED_PULSE_ORANGE, cmd_shim_noop),
+    DEFINE_SINGLE_BYTE_CMD(OUT_STATUS_LED_PULSE, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_USB_LED_ON, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_USB_LED_PULSE, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_USB_LED_OFF, cmd_shim_noop),
+    DEFINE_SINGLE_BYTE_CMD(OUT_HW_RESET, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_10G_LED_ON, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_10G_LED_OFF, cmd_shim_noop),
     DEFINE_SINGLE_BYTE_CMD(OUT_LED_TOG_PWR_STAT, cmd_shim_noop),
@@ -113,6 +128,8 @@ static char *uart_buffer = NULL; //keeps data streamed directly by the vUART... 
 static char *work_buffer = NULL; //collecting & operatint on the data received from vUART
 static char *work_buffer_curr = NULL; //pointer to the current free space in work_buffer
 static char *hex_print_buffer = NULL; //helper buffer to print char arrays in hex
+
+#define work_buffer_fill() ((unsigned int)(work_buffer_curr - work_buffer))
 
 /**
  * Free all buffers used by this submodule
@@ -207,7 +224,9 @@ match_command(const command_definition **cmd, const char *signature, const unsig
         return PMU_CMD_NOT_FOUND;
     }
 
-    if (likely(sig_len == 1)) {
+    if (likely(sig_len == 1) //regular 1 byte
+        || (sig_len == 3 && signature[1] == 0x0d && signature[2] == 0x0a) //1 byte with CRLF (sic!)
+       ) {
         if (!has_single_byte_cmd(signature[0]))
             return PMU_CMD_NOT_FOUND;
 
@@ -226,8 +245,8 @@ static void route_command(const char *buffer, const unsigned int len)
     const command_definition *cmd = NULL;
 
     if (match_command(&cmd, buffer, len) != PMU_CMD_FOUND) {
-        pr_loc_wrn("Unknown PMU command with signature hex=\"%s\" ascii=\"%*.s\"", get_hex_print(buffer, len), len,
-                   buffer);
+        pr_loc_wrn("Unknown %d byte PMU command with signature hex=\"%s\" ascii=\"%.*s\"", len,
+                   get_hex_print(buffer, len), len, buffer);
         return;
     }
 
@@ -278,7 +297,7 @@ static noinline void process_work_buffer(bool end_of_packet)
     }
 
     //We've finished processing the buffer. Now we need to decide what to do with that last piece of data
-    int processed = (int)(work_buffer_curr - work_buffer);
+    unsigned int processed = work_buffer_fill();
     if (cmd_len != -1) { //if it's -1 it means we didn't find any heading so we're just discarding all data
         if (end_of_packet) {
             route_command(work_buffer_curr-cmd_len, cmd_len);
@@ -287,7 +306,7 @@ static noinline void process_work_buffer(bool end_of_packet)
         }
     }
 
-    unsigned int left = (unsigned int)(work_buffer_curr - work_buffer - processed);
+    unsigned int left = work_buffer_fill() - processed;
     if (likely(left != 0)) {
         memmove(work_buffer, work_buffer+processed, left);
     }
@@ -302,9 +321,9 @@ static noinline void process_work_buffer(bool end_of_packet)
  */
 static noinline void pmu_rx_callback(int line, const char *buffer, unsigned int len, vuart_flush_reason reason)
 {
-    pr_loc_dbg("Got %d bytes from PMU: ascii=\"%.*s\" hex={%s}", len, len, buffer, get_hex_print(buffer, len));
+    pr_loc_dbg("Got %d bytes from PMU: reason=%d hex={%s} ascii=\"%.*s\"", len, reason, get_hex_print(buffer, len), len, buffer);
 
-    int buffer_space = (int)(work_buffer + WORK_BUFFER_LEN - work_buffer_curr);
+    int buffer_space = WORK_BUFFER_LEN - work_buffer_fill();
     if (unlikely(work_buffer_curr + len > work_buffer + WORK_BUFFER_LEN)) { //todo just remove as much as needed from the buffer to fit more data
         pr_loc_err("Work buffer is full! Only %d of %d bytes will be copied from receiver", len, buffer_space);
         len = buffer_space;
@@ -325,7 +344,9 @@ static noinline void pmu_rx_callback(int line, const char *buffer, unsigned int 
     // beginning of "-SW1".
     //We also forcefully flush on full buffer even if no IDLE was specified, as it's technically possible for the
     // software to send a long sequence of commands at once totaling more than our buffer (extremely unlikely).
-    if (reason == VUART_FLUSH_IDLE)
+    //Additionally, we only process IDLE-signalled buffers when they have at least a single byte of data as some
+    // versions of the mfgBIOS attach head AND THEN in a separate packet send the actual commands (sic!)
+    if (reason == VUART_FLUSH_IDLE && work_buffer_fill() > 1)
         process_work_buffer(true);
     //our buffer is full [we must process] or vUART buffer was full [we should process]
     else if (buffer_space <= len || reason == VUART_FLUSH_FULL)
@@ -357,7 +378,6 @@ int register_pmu_shim(const struct hw_config *hw)
     error_out:
     vuart_remove_device(PMU_TTYS_LINE); //this also removes callback (if set)
     return out;
-
 }
 
 int unregister_pmu_shim(void)

@@ -50,13 +50,13 @@ static int __init init_redpill(void)
 #ifndef DBG_DISABLE_UNLOADABLE
          || (out = register_pci_shim(current_config.hw_config)) != 0
 #endif
-//         || (out = register_pmu_shim(current_config.hw_config)) != 0
+         || (out = register_pmu_shim(current_config.hw_config)) != 0
          //This one should be done really late so that if it does hide something it's not hidden from us
          || (out = initialize_stealth(&current_config)) != 0
        )
         goto error_out;
 
-    pr_loc_inf("RedPill %s loaded (stealth=%d)", RP_VERSION_STR, STEALTH_MODE);
+    pr_loc_inf("RedPill %s loaded successfully (stealth=%d)", RP_VERSION_STR, STEALTH_MODE);
     return 0;
 
     error_out:
@@ -74,7 +74,7 @@ static void __exit cleanup_redpill(void)
 
     int (*cleanup_handlers[])(void ) = {
         uninitialize_stealth,
-//        unregister_pmu_shim,
+        unregister_pmu_shim,
 #ifndef DBG_DISABLE_UNLOADABLE
         unregister_pci_shim,
 #endif
