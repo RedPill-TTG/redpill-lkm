@@ -27,19 +27,48 @@ OBJS   = $(SRCS-y:.c=.o)
 # must be linked (redpill-objs variable)
 obj-m += redpill.o
 redpill-objs := $(OBJS)
-ccflags-y += -std=gnu99 -fgnu89-inline -Wno-declaration-after-statement -g -fno-inline
+ccflags-y += -std=gnu99 -fgnu89-inline -Wno-declaration-after-statement
 ccflags-y += -I$(src)/compat/toolkit/include
-
-ifneq ($(STEALTH_MODE),)
-ccflags-y += -DSTEALTH_MODE=$(STEALTH_MODE)
-endif
 
 ifndef RP_VERSION_POSTFIX
 RP_VERSION_POSTFIX := $(shell git rev-parse --is-inside-work-tree 1>/dev/null 2>/dev/null && echo -n "git-" && git log -1 --pretty='%h' 2>/dev/null || echo "???")
 endif
 ccflags-y += -DRP_VERSION_POSTFIX="\"$(RP_VERSION_POSTFIX)\""
 
-all:
-	$(MAKE) -C $(LINUX_SRC) M=$(PWD) modules
+# Optimization settings per-target. Since LKM makefiles are evaluated twice (first with the specified target and second
+# time with target "modules") we need to set the custom target variable during first parsing and based on that variable
+# set additional CC-flags when the makefile is parsed for the second time
+ifdef RP_MODULE_TARGET
+ccflags-dev = -g -fno-inline -DDEBUG
+ccflags-test = -O3
+ccflags-prod = -O3
+
+$(info RP-TARGET SPECIFIED AS ${RP_MODULE_TARGET})
+
+# stealth mode can always be overridden but there are sane per-target defaults (see above)
+ifneq ($(STEALTH_MODE),)
+$(info STEATLH MODE OVERRIDE: ${STEALTH_MODE})
+ccflags-y += -DSTEALTH_MODE=$(STEALTH_MODE)
+else
+ccflags-dev += -DSTEALTH_MODE=1
+ccflags-test += -DSTEALTH_MODE=2
+ccflags-prod += -DSTEALTH_MODE=3
+endif
+
+ccflags-y += ${ccflags-${RP_MODULE_TARGET}}
+else
+# during the first read of the makefile we don't get the RP_MODULE_TARGET - if for some reason we didn't get it during
+# the actual build phase it should explode (and it will if an unknown GCC flag is specified). We cannot sue makefile
+# error here as we don't know if the file is parsed for the first time or the second time. Just Kbuild peculiarities ;)
+ccflags-y = --bogus-flag-which-should-not-be-called-NO_RP_MODULE_TARGER_SPECIFIED
+endif
+
+# do NOT move this target - make <3.80 doesn't have a way to specify default target and takes the first one found
+dev: # all symbols included, debug messages included
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="dev" modules
+test: # fully stripped with only warning & above (no debugs or info)
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="test" modules
+prod: # fully stripped with no debug messages
+	$(MAKE) -C $(LINUX_SRC) M=$(PWD) RP_MODULE_TARGET="prod" modules
 clean:
 	$(MAKE) -C $(LINUX_SRC) M=$(PWD) clean
