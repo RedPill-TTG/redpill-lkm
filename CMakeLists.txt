@@ -20,6 +20,7 @@ add_definitions(-DDBG_EXECVE)
 # Generic options
 add_definitions(-D__KERNEL__)
 add_definitions(-DMODULE)
+add_definitions(-DKBUILD_MODNAME=\"dummy\")
 
 # bromolow + bromowell ones (minus CONFIG_SYNO_* which are replaced with "MY_ABC_HERE" in the kernel anyway)
 add_definitions(-DCONFIG_64BIT)
