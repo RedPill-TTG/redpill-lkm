@@ -233,6 +233,8 @@ static void reset_device(struct serial8250_16550A_vdev *vdev)
 
 /**
  * Allocate/create FIFOs on the device if they don't exist (and if they do you shouldn't call this function)
+ *
+ * @todo it should free on errors
  */
 static int alloc_fifos(struct serial8250_16550A_vdev *vdev)
 {
@@ -294,14 +296,14 @@ static int free_fifos(struct serial8250_16550A_vdev *vdev)
  *
  * This function does NOT recalculate IIRs (see update_interrupts_state()) and assumes you have vdev lock.
  */
-static void flush_tx_fifo(struct serial8250_16550A_vdev *vdev)
+static void flush_tx_fifo(struct serial8250_16550A_vdev *vdev, vuart_flush_reason reason)
 {
-    uart_prdbg("Flushing TX FIFO now!");
+    uart_prdbg("Flushing TX FIFO now! reason=%d", reason);
 
     if (likely(flush_cbs[vdev->line])) {
-        int flushed_bytes = 0;
+        unsigned int flushed_bytes = 0;
         flushed_bytes = kfifo_out(vdev->tx_fifo, flush_cbs[vdev->line]->buffer, VUART_FIFO_LEN);
-        flush_cbs[vdev->line]->fn(vdev->line, flush_cbs[vdev->line]->buffer, flushed_bytes);
+        flush_cbs[vdev->line]->fn(vdev->line, flush_cbs[vdev->line]->buffer, flushed_bytes, reason);
     } else {
         uart_prdbg("No callback for TX FIFO @ %d - discarding", vdev->line);
         kfifo_reset(vdev->tx_fifo);
@@ -367,6 +369,11 @@ static void handle_receive_char(struct serial8250_16550A_vdev *vdev, int value)
  * Called when kernel sent something to the device and it has to be put into TX FIFO & THR
  *
  * This function does NOT recalculate IIRs (see update_interrupts_state()) and assumes you have vdev lock.
+ *
+ * CAUTION: order of these "ifs" for flushes here is crucial: we make a guarantee to the reason parameter that if both
+ *  VUART_FLUSH_THRESHOLD and VUART_FLUSH_FULL are true (i.e. callback was set with threshold == VUART_FIFO_LEN) we
+ *  will prioritize threshold trigger (as a user-specified event takes precedence over internal event of FIFO full)
+ * If the threshold specified by the callback setter was met flush the FIFO
  */
 static void handle_transmit_char(struct serial8250_16550A_vdev *vdev, int value)
 {
@@ -374,8 +381,22 @@ static void handle_transmit_char(struct serial8250_16550A_vdev *vdev, int value)
     vdev->thr = value; //THR is always populated with the value no matter the FIFO or non-FIFO mode
     vdev->lsr &= ~UART_LSR_THRE;
 
+    int fifo_len = kfifo_len(vdev->tx_fifo);
+    //FIFO is full - try to flush it; if we got here it means the threshold is for sure >VUART_FIFO_LEN as this is
+    // checked after we put data into the FIFO (to make sure we trigger THRESHOLD event and not FULL)
+    //The reason why we check this at the beginning of new char and not after adding to FIFO is that if the transmitting
+    // party sends exactly VUART_FIFO_LEN bytes and then ends the transmission we don't want to flush with FULL but with
+    // IDLE to give a better sense of what's going on to the caller. FULL implies "we got too much data, there may be
+    // more coming" while IDLE implies that the unit of transmission ended.
+    if (unlikely(fifo_len == VUART_FIFO_LEN)) {
+        flush_tx_fifo(vdev, VUART_FLUSH_FULL);
+    }
+
     //Put value in FIFO, it will indicate with return of 0 if it was full before attempted put (overrun/overflow)
-    if (unlikely(kfifo_put(vdev->tx_fifo, &value) == 0)) {
+    //This, if we are correct, cannot happen if the flush_tx_fifo() is functioning correctly as we try to flush above
+    int fifo_add = kfifo_put(vdev->tx_fifo, &value);
+    fifo_len += fifo_add; //we can call kfifo_ API for this but why if we have both pieces of info anyway? ;)
+    if (unlikely(fifo_add == 0)) {
         vdev->lsr |= UART_LSR_OE; //set overrun flag as FIFO detected that
         pr_loc_wrn("TX FIFO overflow detected");
     } else {
@@ -384,15 +405,13 @@ static void handle_transmit_char(struct serial8250_16550A_vdev *vdev, int value)
 
     vdev->lsr &= ~UART_LSR_TEMT; //transmitter buffers are no longer empty
 
-    int fifo_len = kfifo_len(vdev->tx_fifo);
     //@todo THRE should be reset immediately in non-FIFO mode (i.e. at the same time as TEMT)
     //This is to prevent kernel from freaking out about "blackhole" UART (see https://unix.stackexchange.com/a/387650)
     if (fifo_len >= VUART_FIFO_LEN / 2)
         vdev->lsr &= ~UART_LSR_THRE;
 
-    //If the threshold specified by the callback setter was met flush the FIFO
     if (likely(flush_cbs[vdev->line]) && fifo_len >= flush_cbs[vdev->line]->threshold)
-        flush_tx_fifo(vdev);
+        flush_tx_fifo(vdev, VUART_FLUSH_THRESHOLD);
 }
 
 /**
@@ -543,8 +562,8 @@ static void serial_remote_write(struct uart_port *port, int offset, int value)
              * So in short: if THReINT was enabled and it JUST got disabled flush the FIFO if it isn't empty
              */
             if ((vdev->ier & UART_IER_THRI) && !(value & UART_IER_THRI) && !kfifo_is_empty(vdev->tx_fifo)) {
-                uart_prdbg("Kernel driver disabled THRe interrupt and fifo isn't empty - triggering flush");
-                flush_tx_fifo(vdev);
+                uart_prdbg("Kernel driver disabled THRe interrupt and fifo isn't empty - triggering IDLE flush");
+                flush_tx_fifo(vdev, VUART_FLUSH_IDLE);
             }
             vdev->ier = value & 0x0f; //we're not letting kernel set DMA registers since we don't support DMA
             reg_write_dump(vdev, ier, "IER");
@@ -700,7 +719,7 @@ static int update_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
     //This is the most explosion-prone section so logs are useful
     uart_prdbg("Calling serial8250_register_8250_port to register port");
     if ((out = serial8250_register_8250_port(up)) < 0) { //it returns port # on success or -E on error
-        pr_loc_err("Failed to register ttyS%d - driver failure", vdev->line);
+        pr_loc_err("Failed to register ttyS%d - driver failure (error=%d)", vdev->line, out);
         goto out_free;
     }
     pr_loc_dbg("ttyS%d registered with driver (line=%d)", vdev->line, out);
@@ -735,7 +754,7 @@ static int restore_serial8250_isa_port(struct serial8250_16550A_vdev *vdev)
     //all default callbacks.
     pr_loc_dbg("Calling serial8250_register_8250_port to restore port");
     if ((out = serial8250_register_8250_port(up)) < 0) { //it returns port # on success or -E on error
-        pr_loc_err("Failed to restore ttyS%d - driver failure", vdev->line);
+        pr_loc_err("Failed to restore ttyS%d - driver failure (error=%d)", vdev->line, out);
         goto out_free;
     }
     pr_loc_dbg("ttyS%d finished unregistraton from driver (line=%d)", vdev->line, out);
@@ -851,7 +870,7 @@ int vuart_add_device(int line)
     return out;
 }
 
-int vuart_remove_device(int line) //@todo add removing callbacks
+int vuart_remove_device(int line)
 {
     pr_loc_dbg("Removing vUART ttyS%d", line);
 
