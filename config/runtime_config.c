@@ -77,7 +77,7 @@ static inline bool validate_boot_dev(const struct boot_media *boot)
     return false;
 }
 
-static inline bool validate_nets(const unsigned short if_num, mac_address *macs[MAX_NET_IFACES])
+static inline bool validate_nets(const unsigned short if_num, mac_address * const macs[MAX_NET_IFACES])
 {
     size_t mac_len;
     unsigned short macs_num = 0;
