@@ -70,5 +70,13 @@ DEFINE_UNEXPORTED_SHIM(int, set_memory_ro, CP_LIST(unsigned long addr, int numpa
 DEFINE_UNEXPORTED_SHIM(int, set_memory_rw, CP_LIST(unsigned long addr, int numpages), CP_LIST(addr, numpages), -EFAULT);
 #endif
 
+//We only need these for intercept_execve() on newer kernels
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
+DEFINE_UNEXPORTED_SHIM(int, do_execve, CP_LIST(struct filename *filename,
+        const char __user *const __user *__argv,
+        const char __user *const __user *__envp), CP_LIST(filename, __argv, __envp), -EINTR);
+DEFINE_UNEXPORTED_SHIM(struct filename *, getname, CP_LIST(const char __user * filename), CP_LIST(filename), ERR_PTR(-EFAULT));
+#endif
+
 DEFINE_DYNAMIC_SHIM(void, usb_register_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);
 DEFINE_DYNAMIC_SHIM(void, usb_unregister_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);

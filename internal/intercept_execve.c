@@ -1,8 +1,32 @@
+/*
+ * Submodule used to hook the execve() syscall, used by the userland to execute binaries.
+ *
+ * This submodule can currently block calls to specific binaries and fake a successful return of the execution. In the
+ * future, if needed, an option to fake certain response and/or execute a different binary instead can be easily added
+ * here.
+ *
+ * execve() is a rather special syscall. This submodule utilized override_symbool.c:override_syscall() to do the actual
+ * ground work of replacing the call. However some syscalls (execve, fork, etc.) use ASM stubs with a non-GCC call
+ * convention. Up until Linux v3.18 it wasn't a problem as long as the stub was called back. However, since v3.18 the
+ * stub was changed in such a way that calling it using a normal convention from (i.e. from the shim here) will cause
+ * IRET imbalance and a crash. This is worked around by skipping the whole stub and calling do_execve() with a filename
+ * struct directly. This requires re-exported versions of these functions, so it may be marginally slower.
+ * Because of that this trick is only utilized on Linux >v3.18 and older ones call the stub as normal.
+ *
+ * References:
+ *  - https://github.com/torvalds/linux/commit/b645af2d5905c4e32399005b867987919cbfc3ae
+ *  - https://my.oschina.net/macwe/blog/603583
+ *  - https://stackoverflow.com/questions/8372912/hooking-sys-execve-on-linux-3-x
+ */
 #include "intercept_execve.h"
 #include "../common.h"
 #include "override_symbol.h" //override_syscall()
 #include <generated/uapi/asm/unistd_64.h> //syscalls numbers
 #include <uapi/linux/limits.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
+#include "call_protected.h" //do_execve() & getname()
+#endif
 
 #ifdef RPDBG_EXECVE
 #include "../debug/debug_execve.h"
@@ -66,14 +90,17 @@ static asmlinkage long shim_sys_execve(const char __user *filename,
         }
     }
 
+//On newer kernels the stub will break the stack. Calling do_execve() directly goes around the problem.
+//A proper solution would be a custom ASM stub but this is complex & fragile: https://my.oschina.net/macwe/blog/603583
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,18,0)
     return org_sys_execve(filename, argv, envp);
+#else
+    return _do_execve(_getname(filename), argv, envp);
+#endif
 }
 
 int register_execve_interceptor()
 {
-    //This, according to many sources (e.g. https://stackoverflow.com/questions/8372912/hooking-sys-execve-on-linux-3-x)
-    // should NOT work. It does work as we're not calling the sys_execve() directly but through the expected ASM stub...
-    //I *think* that's why it work (or I failed to find a scenario where it doesn't yet :D)
     int out = override_syscall(__NR_execve, shim_sys_execve, (void *)&org_sys_execve);
     if (out != 0)
         return out;

@@ -14,7 +14,6 @@ bool kernel_has_symbol(const char *name);
 
 
 #include <linux/seq_file.h>
-
 CP_DECLARE_SHIM(int, cmdline_proc_show, CP_LIST(struct seq_file *m, void *v));
 
 //See https://github.com/torvalds/linux/commit/6bbb614ec478961c7443086bdf7fd6784479c14a
@@ -24,6 +23,15 @@ CP_DECLARE_SHIM(int, set_memory_rw, CP_LIST(unsigned long addr, int numpages));
 #else
 #define _set_memory_ro(...) set_memory_ro(__VA_ARGS__)
 #define _set_memory_rw(...) set_memory_ro(__VA_ARGS__)
+#endif
+
+//We only need these for intercept_execve() on newer kernels
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
+#include <linux/fs.h>
+CP_DECLARE_SHIM(int, do_execve, CP_LIST(struct filename *filename,
+        const char __user *const __user *__argv,
+        const char __user *const __user *__envp));
+CP_DECLARE_SHIM(struct filename *, getname, CP_LIST(const char __user *));
 #endif
 
 #include <linux/notifier.h>
