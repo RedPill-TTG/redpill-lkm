@@ -1,0 +1,6 @@
+#ifndef REDPILL_IOSCHEDULER_FIXER_H
+#define REDPILL_IOSCHEDULER_FIXER_H
+
+int reset_elevator(void);
+
+#endif //REDPILL_IOSCHEDULER_FIXER_H

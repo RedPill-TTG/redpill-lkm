@@ -3,6 +3,11 @@
 
 #include <linux/version.h> //LINUX_VERSION_CODE, KERNEL_VERSION
 #include <linux/types.h> //bool
+#include <linux/kernel.h> //system_states & system_state
+
+// *************************************** Useful macros *************************************** //
+//Check if the system is still in booting stage (useful when you want to call __init functions as they're deleted)
+#define is_system_booting() (system_state == SYSTEM_BOOTING)
 
 // ************************** Exports of normally protected functions ************************** //
 
@@ -62,6 +67,9 @@ CP_DECLARE_SHIM(int, scsi_scan_host_selected,
 
 struct ida;
 CP_DECLARE_SHIM(int, ida_pre_get, CP_LIST(struct ida *ida, gfp_t gfp_mask));
+
+//Used for fixing I/O scheduler if module was loaded using elevator= and broke it
+CP_DECLARE_SHIM(int, elevator_setup, CP_LIST(char *str));
 
 struct notifier_block;
 CP_DECLARE_SHIM(void, usb_register_notify, CP_LIST(struct notifier_block *nb));

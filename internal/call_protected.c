@@ -30,6 +30,34 @@
       return ((org_function_name##__ret)org_function_name##__addr)(call_vars);                    \
   }
 
+//This macro should be used to export symbols which aren't normally EXPORT_SYMBOL/EXPORT_SYMBOL_GPL in the kernel but
+// they exist within the kernel and are defined as __init. These symbol can only be called when the system is still
+// booting (i.e. before init user-space binary was called). After that calling such functions is a lottery - the memory
+// of them is freed by free_initmem() [called in main.c:kernel_init()]. That's why we skip any caching kere as these are
+// called mostly as a one-off during boot process when this module was loaded as a I/O scheduler.
+//All re-exported function will have _ prefix (e.g. foo() becomes _foo())
+#define DEFINE_UNEXPORTED_INIT_SHIM(return_type, org_function_name, call_args, call_vars, fail_return) \
+  extern asmlinkage return_type org_function_name(call_args);                                          \
+  typedef typeof(org_function_name) *org_function_name##__ret;                                         \
+  return_type _##org_function_name(call_args)                                                          \
+  {                                                                                                    \
+      unsigned long org_function_name##__addr = 0;                                                     \
+      if (unlikely(!is_system_booting())) {                                                            \
+          pr_loc_bug("Attempted to call %s() when the system is already booted (state=%d)",            \
+                     #org_function_name, system_state);                                                \
+          return fail_return;                                                                          \
+      }                                                                                                \
+                                                                                                       \
+      org_function_name##__addr = kallsyms_lookup_name(#org_function_name);                            \
+      if (org_function_name##__addr == 0) {                                                            \
+          pr_loc_bug("Failed to fetch %s() syscall address", #org_function_name);                      \
+          return fail_return;                                                                          \
+      }                                                                                                \
+      pr_loc_dbg("Got addr %lx for %s", org_function_name##__addr, #org_function_name);                \
+                                                                                                       \
+      return ((org_function_name##__ret)org_function_name##__addr)(call_vars);                         \
+  }
+
 //This macro should be used to export symbols which are normally exported by modules in situations where this module
 // must be loaded before such module exporting the symbol.
 //Normally if symbol for module "X" is used in "Y" the kernel will complain that "X" muse be loaded before "Y".
@@ -78,6 +106,8 @@ DEFINE_UNEXPORTED_SHIM(int, ida_pre_get, CP_LIST(struct ida *ida, gfp_t gfp_mask
 
 DEFINE_UNEXPORTED_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port), port, -EIO);
 DEFINE_UNEXPORTED_SHIM(int, serial8250_find_port, CP_LIST(struct uart_port *p), CP_LIST(p), -EIO);
+
+DEFINE_UNEXPORTED_INIT_SHIM(int, elevator_setup, CP_LIST(char *str), CP_LIST(str), -EINVAL);
 
 DEFINE_DYNAMIC_SHIM(void, usb_register_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);
 DEFINE_DYNAMIC_SHIM(void, usb_unregister_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);

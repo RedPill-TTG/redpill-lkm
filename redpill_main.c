@@ -4,6 +4,7 @@
 #include "common.h" //commonly used headers in this module
 #include "internal/intercept_execve.h" //Handling of execve() replacement
 #include "internal/scsi/scsi_notifier.h" //the missing pub/sub handler for SCSI driver
+#include "internal/ioscheduler_fixer.h" //reset_elevator() to correct elevator= boot cmdline
 #include "config/cmdline_delegate.h" //Parsing of kernel cmdline
 #include "shim/boot_device_shim.h" //Registering & deciding between boot device shims
 #include "shim/bios_shim.h" //Shimming various mfgBIOS functions to make them happy
@@ -60,7 +61,8 @@ static int __init init_(void)
 #endif
          || (out = register_disk_smart_shim()) != 0 //provide fake SMART to userspace
          || (out = register_pmu_shim(current_config.hw_config)) != 0 //this is used as early as mfgBIOS loads (=late)
-         || (out = initialize_stealth(&current_config)) != 0 //Should be last so if it hides sth it's not hidden from us
+         || (out = initialize_stealth(&current_config)) != 0 //Should be after any shims to let shims have real stuff
+         || (out = reset_elevator()) != 0 //Cosmetic, can be the last one
        )
         goto error_out;
 
@@ -68,7 +70,7 @@ static int __init init_(void)
     return 0;
 
     error_out:
-        pr_loc_crt("RedPill %s cannot be loaded, error=%d", RP_VERSION_STR, out);
+        pr_loc_crt("RedPill %s cannot be loaded, initializer error=%d", RP_VERSION_STR, out);
 #ifdef KP_ON_LOAD_ERROR
         rp_crash();
 #else
