@@ -18,7 +18,7 @@
   static unsigned long org_function_name##__addr = 0;                                             \
   return_type _##org_function_name(call_args)                                                     \
   {                                                                                               \
-      if (org_function_name##__addr == 0) {                                                       \
+      if (unlikely(org_function_name##__addr == 0)) {                                             \
           org_function_name##__addr = kallsyms_lookup_name(#org_function_name);                   \
           if (org_function_name##__addr == 0) {                                                   \
               pr_loc_bug("Failed to fetch %s() syscall address", #org_function_name);             \
