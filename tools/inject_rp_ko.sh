@@ -48,6 +48,7 @@ if file "$TMP_MNT_DIR/rd.gz" | grep -q 'cpio archive'; then # special case: unco
   IRP_FLAT_RD=1
   cat "$TMP_MNT_DIR/rd.gz" | cpio -idmv
 else
+  IRP_FLAT_RD=0
   xz -dc < "$TMP_MNT_DIR/rd.gz" | cpio -idmv
 fi
 
@@ -55,7 +56,7 @@ echo "Copying $lkm"
 cp "$lkm" "$TMP_RDU_DIR/usr/lib/modules/rp.ko"
 
 echo "Repacking $TMP_MNT_DIR/rd.gz"
-if [[ ! -z "${IRP_FLAT_RD}" ]]; then # special case: uncompressed rd
+if [[ IRP_FLAT_RD -eq 1 ]]; then # special case: uncompressed rd
   find . 2>/dev/null | cpio -o -H newc -R root:root > "$TMP_MNT_DIR/rd.gz"
 else
   find . 2>/dev/null | cpio -o -H newc -R root:root | xz -9 --format=lzma > "$TMP_MNT_DIR/rd.gz"
