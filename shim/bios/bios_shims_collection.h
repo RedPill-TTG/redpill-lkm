@@ -48,4 +48,9 @@ int shim_disk_leds_ctrl(const struct hw_config *hw);
  */
 int unshim_disk_leds_ctrl(void);
 
+/**
+ * Used by mfgBIOS sub-shims. Should NOT be called from ANY other context as it depends on the internal state.
+ */
+void _shim_bios_module_entry(unsigned int idx, const void *new_sym_ptr);
+
 #endif //REDPILL_BIOS_SHIMS_COLLECTION_H

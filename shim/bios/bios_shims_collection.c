@@ -1,22 +1,58 @@
 #include "bios_shims_collection.h"
-#include "mfgbios_types.h"
-#include "../../config/runtime_config.h" //hw_config
+#include "../../config/platform_types.h"
 #include "rtc_proxy.h"
 #include "../../common.h"
 #include "../../internal/helper/symbol_helper.h" //kernel_has_symbol()
 #include "../../internal/override_symbol.h" //shimming leds stuff
-#include <linux/synobios.h> //SYNO_DISK_LED
 
-/************************************************* mfgBIOS LKM shims **************************************************/
+
+#define DECLARE_NULL_ZERO_INT(for_what)                         \
+    static __used int bios_##for_what##_null_zero_int(void) {   \
+        pr_loc_dbg("mfgBIOS: nullify zero-int for " #for_what); \
+        return 0;                                               \
+    }
+#define SHIM_TO_NULL_ZERO_INT(for_what) _shim_bios_module_entry(for_what, bios_##for_what##_null_zero_int);
+
+/********************************************* mfgBIOS LKM static shims ***********************************************/
 static unsigned long org_shimmed_entries[VTK_SIZE] = { '\0' }; //original entries which were shimmed by custom entries
 static unsigned long cust_shimmed_entries[VTK_SIZE] = { '\0' }; //custom entries which were set as shims
 
-static unsigned long shim_null_zero_ulong(void) { return 0; }
-static unsigned long shim_null_zero_ulong_trace(void) { dump_stack(); return 0; }
-static unsigned long shim_get_gpio_pin_usable(int *pin) { pin[1] = 0; return 0; }
-
-static void inline shim_entry(unsigned long *vtable_start, const unsigned int idx, const void *new_sym_ptr)
+static int shim_get_gpio_pin_usable(int *pin)
 {
+    pin[1] = 0;
+    return 0;
+}
+
+static int bios_get_buz_clr(unsigned char *state)
+{
+    *state = 0;
+    return 0;
+}
+
+/***************************************** Debug shims for unknown bios functions **************************************/
+DECLARE_NULL_ZERO_INT(VTK_SET_FAN_STATE);
+DECLARE_NULL_ZERO_INT(VTK_SET_DISK_LED);
+DECLARE_NULL_ZERO_INT(VTK_SET_PWR_LED);
+DECLARE_NULL_ZERO_INT(VTK_SET_GPIO_PIN);
+DECLARE_NULL_ZERO_INT(VTK_SET_GPIO_PIN_BLINK);
+DECLARE_NULL_ZERO_INT(VTK_SET_ALR_LED);
+DECLARE_NULL_ZERO_INT(VTK_SET_BUZ_CLR);
+DECLARE_NULL_ZERO_INT(VTK_SET_CPU_FAN_STATUS);
+DECLARE_NULL_ZERO_INT(VTK_SET_PHY_LED);
+DECLARE_NULL_ZERO_INT(VTK_SET_HDD_ACT_LED);
+DECLARE_NULL_ZERO_INT(VTK_GET_MICROP_ID);
+DECLARE_NULL_ZERO_INT(VTK_SET_MICROP_ID);
+
+/********************************************** mfgBIOS shimming routines *********************************************/
+static unsigned long *vtable_start = NULL; //set when shim_bios_module is called()
+void _shim_bios_module_entry(const unsigned int idx, const void *new_sym_ptr)
+{
+    if (unlikely(!vtable_start)) {
+        pr_loc_bug("%s called without vtable start populated - are you calling it outside of shim_bios_module scope?!",
+                  __FUNCTION__);
+        return;
+    }
+
     if (unlikely(idx > VTK_SIZE-1)) {
         pr_loc_bug("Attempted shim on index %d - out of range", idx);
         return;
@@ -40,7 +76,7 @@ static void inline shim_entry(unsigned long *vtable_start, const unsigned int id
 /**
  * Prints a table of memory between vtable_start and vtable_end, trying to resolve symbols as it goes
  */
-static void print_debug_symbols(unsigned long *vtable_start, unsigned long *vtable_end)
+static void print_debug_symbols(const unsigned long *vtable_end)
 {
     if (unlikely(!vtable_start)) {
         pr_loc_dbg("Cannot print - no vtable address");
@@ -71,50 +107,50 @@ static void print_debug_symbols(unsigned long *vtable_start, unsigned long *vtab
  *
  * @return true when shimming succeeded, false otherwise
  */
-bool shim_bios_module(const struct hw_config *hw, struct module *mod, unsigned long *vtable_start, unsigned long *vtable_end)
+bool shim_bios_module(const struct hw_config *hw, struct module *mod, unsigned long *vt_start, unsigned long *vt_end)
 {
-    if (unlikely(!vtable_start)) {
-        pr_loc_bug("%s called without vtable start populated?!", __FUNCTION__);
+    if (unlikely(!vt_start || !vt_end)) {
+        pr_loc_bug("%s called without vtable start or vt_end populated?!", __FUNCTION__);
         return false;
     }
 
-    print_debug_symbols(vtable_start, vtable_end);
-    shim_entry(vtable_start, VTK_GET_FAN_STATE, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_FAN_STATE, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_DISK_LED, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_PWR_LED, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_PWR_LED, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_GPIO_PIN, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_GET_GPIO_PIN, shim_get_gpio_pin_usable);
-    shim_entry(vtable_start, VTK_SET_GPIO_PIN_BLINK, shim_null_zero_ulong_trace);
-    shim_entry(vtable_start, VTK_SET_ALR_LED, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_GET_BUZ_CLR, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_BUZ_CLR, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_CPU_FAN_STATUS, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_PHY_LED, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_HDD_ACT_LED, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_GET_MICROP_ID, shim_null_zero_ulong);
-    shim_entry(vtable_start, VTK_SET_MICROP_ID, shim_null_zero_ulong);
+    vtable_start = vt_start;
+
+    print_debug_symbols(vt_end);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_FAN_STATE);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_DISK_LED);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_PWR_LED);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_GPIO_PIN);
+    _shim_bios_module_entry(VTK_GET_GPIO_PIN, shim_get_gpio_pin_usable);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_GPIO_PIN_BLINK);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_ALR_LED);
+    _shim_bios_module_entry(VTK_GET_BUZ_CLR, bios_get_buz_clr);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_BUZ_CLR);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_CPU_FAN_STATUS);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_PHY_LED);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_HDD_ACT_LED);
+    SHIM_TO_NULL_ZERO_INT(VTK_GET_MICROP_ID);
+    SHIM_TO_NULL_ZERO_INT(VTK_SET_MICROP_ID);
 
     if (hw->emulate_rtc) {
         pr_loc_dbg("Platform requires RTC proxy - enabling");
         register_rtc_proxy_shim();
-        shim_entry(vtable_start, VTK_RTC_GET_TIME, rtc_proxy_get_time);
-        shim_entry(vtable_start, VTK_RTC_SET_TIME, rtc_proxy_set_time);
-        shim_entry(vtable_start, VTK_RTC_INT_APWR, rtc_proxy_init_auto_power_on);
-        shim_entry(vtable_start, VTK_RTC_GET_APWR, rtc_proxy_get_auto_power_on);
-        shim_entry(vtable_start, VTK_RTC_SET_APWR, rtc_proxy_set_auto_power_on);
-        shim_entry(vtable_start, VTK_RTC_UINT_APWR, rtc_proxy_uinit_auto_power_on);
+        _shim_bios_module_entry(VTK_RTC_GET_TIME, rtc_proxy_get_time);
+        _shim_bios_module_entry(VTK_RTC_SET_TIME, rtc_proxy_set_time);
+        _shim_bios_module_entry(VTK_RTC_INT_APWR, rtc_proxy_init_auto_power_on);
+        _shim_bios_module_entry(VTK_RTC_GET_APWR, rtc_proxy_get_auto_power_on);
+        _shim_bios_module_entry(VTK_RTC_SET_APWR, rtc_proxy_set_auto_power_on);
+        _shim_bios_module_entry(VTK_RTC_UINT_APWR, rtc_proxy_uinit_auto_power_on);
     } else {
         pr_loc_dbg("Native RTC supported - not enabling proxy (emulate_rtc=%d)", hw->emulate_rtc ? 1:0);
     }
 
-    print_debug_symbols(vtable_start, vtable_end);
+    print_debug_symbols(vt_end);
 
     return true;
 }
 
-bool unshim_bios_module(unsigned long *vtable_start, unsigned long *vtable_end)
+bool unshim_bios_module(unsigned long *vt_start, unsigned long *vt_end)
 {
     for (int i = 0; i < VTK_SIZE; i++) {
         //make sure to check the cust_ one as org_ may contain NULL ptrs and we should restore them as NULL if they were
@@ -122,8 +158,8 @@ bool unshim_bios_module(unsigned long *vtable_start, unsigned long *vtable_end)
         if (!cust_shimmed_entries[i])
             continue;
 
-        pr_loc_dbg("Restoring vtable [%d] from %ps<%p> to %ps<%p>", i, (void *) vtable_start[i],
-                   (void *) vtable_start[i], (void *) org_shimmed_entries[i], (void *) org_shimmed_entries[i]);
+        pr_loc_dbg("Restoring vtable [%d] from %ps<%p> to %ps<%p>", i, (void *) vt_start[i],
+                   (void *) vt_start[i], (void *) org_shimmed_entries[i], (void *) org_shimmed_entries[i]);
         vtable_start[i] = org_shimmed_entries[i];
     }
 
