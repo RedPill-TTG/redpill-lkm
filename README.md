@@ -20,16 +20,24 @@ Read about the quirk in a separate repo: https://github.com/RedPill-TTG/dsm-rese
 ## How to build?
 1. You need Synology's GPL sources for the kernel. Check the [Makefile](Makefile) for details
 2. `cd` to kernel sources
-3. `cp synconfig/bromolow .config` (or any desired one)
+3. Depending on the version:  
+   - **Linux v3**
+      - `cp synoconfigs/bromolow .config`
+   - **Linux v4**
+      - `cp synoconfigs/apollolake .config`
+      - `echo '+' > .scmversion` (otherwise it will error-out loading modules)
 4. `make oldconfig ; make modules_prepare`
 5. `cd` back to the module directory
-5. `make`
-6. You will get a `redpill.ko` module as the result, you can `insmod` it
+6. `make LINUX_SRC=....` (path to linux sources, default: `./linux-3.10.x-bromolow-25426`)
+7. You will get a `redpill.ko` module as the result, you can `insmod` it
 
 While calling `make` you can also add these additional modifiers (e.g. `make FOO BAR`):
  - `DBG_EXECVE`: enabled debugging of every `execve()` call with arguments
  - `STEALTH_MODE=#`: controls the level of "stealthiness", see `STEALTH_MODE_*` in `internal/stealth.h`; it's 
    `STEALTH_MODE_BASIC` by default
+ - `LINUX_SRC=...`: path to the linux kernel sources (`./linux-3.10.x-bromolow-25426` by default)
+
+On Debian-based systems you will need `build-essential` and `libssl-dev` packages at minimum.
 
 ## Documentation split
 The documentation regarding actual quirks/mechanisms/discoveries regarding DSM is present in a dedicated research repo 

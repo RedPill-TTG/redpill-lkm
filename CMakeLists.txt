@@ -5,8 +5,13 @@ cmake_minimum_required(VERSION 3.0)
 project(redpill C)
 
 set(CMAKE_C_STANDARD 11)
+add_definitions(-DLINUX_VERSION_CODE=199273)
 include_directories(./linux-3.10.x-bromolow-25426/include)
 include_directories(./linux-3.10.x-bromolow-25426/arch/x86/include)
+
+#add_definitions(-DLINUX_VERSION_CODE=263227)
+#include_directories(./linux-4.4.x-apollolake-25426/include)
+#include_directories(./linux-4.4.x-apollolake-25426/arch/x86/include)
 
 # Generic options
 add_definitions(-D__KERNEL__)
