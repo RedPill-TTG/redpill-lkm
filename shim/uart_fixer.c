@@ -108,7 +108,7 @@ static int fix_muted_ttyS0(void)
     int out = 0;
     struct uart_port port = {
         .iobase = STD_COM1_IOBASE,
-        .uartclk = STD_COMX_BAUD,
+        .uartclk = STD_COMX_BAUD * 16,
         .irq = STD_COM1_IRQ,
         .flags = STD_COMX_FLAGS
     };
