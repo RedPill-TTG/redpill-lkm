@@ -7,6 +7,7 @@
 #include "config/cmdline_delegate.h" //Parsing of kernel cmdline
 #include "shim/boot_device_shim.h" //Shimming VID/PID of boot device
 #include "shim/bios_shim.h" //Shimming various mfgBIOS functions to make them happy
+#include "shim/block_fw_update_shim.h" //Prevent firmware update from running
 
 static int __init init_redpill(void)
 {
@@ -17,10 +18,15 @@ static int __init init_redpill(void)
     if (!validate_runtime_config(&current_config))
         goto error_out;
 
-    //All things below MUST be flag-based (either cmdline or device)
     register_boot_shim(&current_config.boot_media, &current_config.mfg_mode);
     if (register_bios_shim() != 0)
         goto error_out;
+
+    if (register_fw_update_shim() != 0)
+        goto error_out;
+
+    //All things below MUST be flag-based (either cmdline or device)
+
 
     pr_loc_inf("RedPill loaded");
 
@@ -35,6 +41,7 @@ static void __exit cleanup_redpill(void)
 {
     pr_loc_inf("RedPill unloading...");
 
+    unregister_fw_update_shim();
     unregister_bios_shim();
     unregister_boot_shim();
 
