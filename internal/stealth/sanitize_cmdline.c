@@ -22,9 +22,11 @@
 #include "sanitize_cmdline.h"
 #include "../../common.h"
 #include "../../config/cmdline_delegate.h" //get_kernel_cmdline() & CMDLINE_MAX
+#include <linux/fs.h> //get_fs_type(), kern_mount()
+#include <linux/namei.h> //vfs_path_lookup()
+#include <linux/mount.h> //struct vfs_mount
 #include <linux/proc_fs.h> //proc_create() & remove_proc_entry()
 #include <linux/seq_file.h> //seq_*
-#include <linux/namei.h> //kern_path()
 #include <../fs/proc/internal.h> //proc_dir_entry internal structure
 
 /**
@@ -32,6 +34,9 @@
  * See filtrate_cmdline() for details
  */
 static char *filtrated_cmdline = "";
+
+//Normally defined in fs/internal.h, also exported
+extern int vfs_path_lookup(struct dentry *, struct vfsmount *, const char *, unsigned int, struct path *);
 
 /**
  * Check if a given cmdline token is on the blacklist
@@ -102,16 +107,32 @@ static int filtrate_cmdline(cmdline_token *cmdline_blacklist[MAX_BLACKLISTED_CMD
  * Located directory entry structure for the original /proc/cmdline
  *
  * The kernel technically has fs/proc/generic.c:xlate_proc_name() but it's static, so it cannot be used from the
- * outside. However, we can always look up the cmdline inode and extract the proc_dir_entry from that
+ * outside. However, we can always look up the cmdline inode and extract the proc_dir_entry from that.
+ * This method access the /proc completely within the kernel as we cannot predict what (or if anything) is mounted under
+ * /proc (and most likely during boot nothing will be).
  *
  * @return pointer to original cmdline dentry or error pointer if it cannot be found (should never happen)
  */
 static struct proc_dir_entry *locate_proc_cmdline(void)
 {
+    struct file_system_type *fst = get_fs_type("proc");
+    if (unlikely(IS_ERR(fst))) {
+        pr_loc_bug("Failed to locate proc filesystem type");
+        return ERR_PTR(-ENODEV);
+    }
+
+    struct vfsmount *mnt = vfs_kern_mount(fst, 0, "procfs", NULL);
+    if (unlikely(IS_ERR(mnt))) {
+        pr_loc_bug("Failed to kern-mount proc");
+        return ERR_PTR(-ENODEV);
+    }
+
     struct path path;
     int out;
-    if((out = kern_path("/proc/cmdline", 0, &path)) != 0)
+    if((out = vfs_path_lookup(mnt->mnt_root, mnt, "cmdline", 0, &path)) != 0) {
+        pr_loc_bug("Failed to lookup cmdline path");
         return ERR_PTR(out);
+    }
 
     return PDE(path.dentry->d_inode);
 }
