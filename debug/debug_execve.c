@@ -85,11 +85,17 @@ static int count_args(struct user_arg_ptr argv)
     return i;
 }
 
+static void inline fixup_arg_str(char *arg_ptr, int cur_argc, const char *what)
+{
+    pr_loc_wrn("Failed to copy %d arg - %s failed", cur_argc, what);
+    memcpy(arg_ptr, "..?\0", 4);
+}
+
 void RPDBG_print_execve_call(const char *filename, const char __user *const __user *argv)
 {
     struct task_struct *caller = get_cpu_var(current_task);
 
-    struct user_arg_ptr argv_up = {.ptr.native = argv};
+    struct user_arg_ptr argv_up = { .ptr.native = argv };
     int argc = count_args(argv_up);
 
     char *arg_str = kzalloc(MAX_ARG_STRLEN, GFP_KERNEL);
@@ -100,14 +106,30 @@ void RPDBG_print_execve_call(const char *filename, const char __user *const __us
 
     char *arg_ptr = &arg_str[0];
     for (int i = 0; i < argc; i++) {
-        strncpy(arg_ptr, argv[i], (&arg_str[MAX_ARG_STRLEN - 2] - arg_ptr));
-        arg_ptr += strlen(arg_ptr);
-        *arg_ptr = (i + 1 == argc) ? '\0' : ' ';
+        const char __user *p = get_user_arg_ptr(argv_up, i);
+        if (IS_ERR(p)) {
+            fixup_arg_str(arg_ptr, i, "get_user_arg_ptr");
+            goto out_free;
+        }
+
+        int len = strnlen_user(p, MAX_ARG_STRLEN); //includes nullbyte
+        if (!len) {
+            fixup_arg_str(arg_ptr, i, "strnlen_user");
+            goto out_free;
+        }
+        --len; //we want to copy without nullbyte as we handle it ourselves while attaching to arg_ptr
+
+        if (copy_from_user(arg_ptr, p, len)) {
+            fixup_arg_str(arg_ptr, i, "copy_from_user");
+            goto out_free;
+         }
+
+        arg_ptr += len;
+        *arg_ptr = (i + 1 == argc) ? '\0' : ' '; //separate by spaces UNLESS it's the last argument
         ++arg_ptr;
     }
 
-    pr_loc_dbg("execve@cpu%d: %s[%d]=>%s<%i> {%s}", caller->on_cpu, caller->comm, caller->pid, filename, argc,
-               arg_str);
-
+    out_free:
+    pr_loc_dbg("execve@cpu%d: %s[%d]=>%s[%d] {%s}", caller->on_cpu, caller->comm, caller->pid, filename, argc, arg_str);
     kfree(arg_str);
 }
