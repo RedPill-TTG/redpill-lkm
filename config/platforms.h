@@ -41,7 +41,7 @@ const struct hw_config supported_platforms[] = {
             },
             .emulate_rtc = true,
             .swap_serial = false,
-            .reinit_ttyS0 = true,
+            .reinit_ttyS0 = false, //this should be true, however disabled due to https://github.com/RedPill-TTG/redpill-lkm/issues/10
     },
 };
 
