@@ -14,18 +14,16 @@
  * when the kernel is compiled with CONFIG_SYNO_KVMX64 (which is a special platform for VDSM). On all other platforms
  * disks connected to VirtIO will be slightly broken in old versions and unusable in newer ones (as their tpe is set to
  * SYNO_DISK_UNKNOWN). This shim brings the functionality available on CONFIG_SYNO_KVMX64 to all platforms.
+ * In addition, it changes SAS ports to be SATA as well as syno reserves SYNO_DISK_SAS for usage with just a few FS
+ * devices and external enclosures.
  *
  * HOW DOES IT WORK?
  * It simply plugs into the SCSI driver (via SCSI notifier) and waits for a new drive. When a new drive is connected it
- * checks if it was connected via the VirtIO driver and changes the port type to SYNO_PORT_TYPE_SATA, which will later
- * force the driver to assume the drive is indeed a "SATA" drive (SYNO_DISK_SATA).
- * While the ports can be enumerated and changed all at once, it's safer to do it per-drive basis as VirtIO driver
- * allows for ports to be dynamically reconfigured and thus the type may change. This is also why we make no effort of
+ * checks if it was connected via the VirtIO driver or through a SAS card driver and changes the port type to
+ * SYNO_PORT_TYPE_SATA, which will later force the driver to assume the drive is indeed a "SATA" drive (SYNO_DISK_SATA).
+ * While the ports can be enumerated and changed all at once, it's safer to do it per-drive basis as drivers allow for
+ * ports to be dynamically reconfigured and thus the type may change. This is also why we make no effort of
  * restoring port types after this shim is unregistered.
- *
- * TODO
- * In the future this shim should be conditional and not load when a given host platform doesn't use VirtIO. It doesn't
- * add a lot of overhead now (as it simply checks each new disk upon connection) but it's not elegant.
  *
  * References
  *   - drivers/scsi/sd.c in Linux sources
@@ -46,7 +44,8 @@
  */
 static bool is_fixable(struct scsi_device *sdp)
 {
-    return (sdp->host->hostt->syno_port_type != SYNO_PORT_TYPE_SATA &&
+    return sdp->host->hostt->syno_port_type == SYNO_PORT_TYPE_SAS ||
+           (sdp->host->hostt->syno_port_type != SYNO_PORT_TYPE_SATA &&
             strcmp(sdp->host->hostt->name, VIRTIO_HOST_ID) == 0);
 }
 
