@@ -49,6 +49,10 @@ static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
     "\xff\xe0" /* JMP *%rax */
 ;
 
+//While writing jump code it may land in just by the end of one page and cross to the next (unlikely). This macro
+// calculates how many pages we need for the jumpcode:                last_page_beginning   -   first_page_beginning
+#define NUM_PAGES_WITH_JUMP(vaddr) (((vaddr + OVERRIDE_JUMP_SIZE - 1) | ~PAGE_MASK) + 1)    -   PAGE_ALIGN(vaddr)
+
 /**
  * Disables write-protection for the memory where symbol resides
  *
@@ -63,14 +67,15 @@ static const unsigned char jump_tpl[OVERRIDE_JUMP_SIZE] =
  */
 static int disable_symbol_wp(const unsigned long vaddr)
 {
-    pr_loc_dbg("Disabling memory protection for %p", (void *)vaddr);
+    pr_loc_dbg("Disabling memory protection for page at %p (<<%p)", (void *)vaddr, (void *)PAGE_ALIGN(vaddr));
 
     unsigned long cr0;
     int out;
     preempt_disable(); //prevent context switching as we're modifying CPU-dependent state
     cr0 = read_cr0() & (~X86_CR0_WP);
     write_cr0(cr0);
-    out = set_memory_rw(vaddr, 1);
+
+    out = set_memory_rw(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
     if (out != 0) {
         pr_loc_err("set_memory_rw() failed: %d", out);
         cr0 |= X86_CR0_WP;
@@ -86,11 +91,10 @@ static int disable_symbol_wp(const unsigned long vaddr)
  */
 static int enable_symbol_wp(const unsigned long vaddr)
 {
-    pr_loc_dbg("Enabling memory protection for %p", (void *)vaddr);
-
+    pr_loc_dbg("Enabling memory protection for page at %p (<<%p)", (void *)vaddr, (void *)PAGE_ALIGN(vaddr));
 
     int out = 0;
-    out = set_memory_ro(vaddr, 1);
+    out = set_memory_ro(PAGE_ALIGN(vaddr), NUM_PAGES_WITH_JUMP(vaddr));
     if (out != 0) {
         pr_loc_err("set_memory_ro() failed: %d", out);
 
