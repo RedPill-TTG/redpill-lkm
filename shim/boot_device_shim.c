@@ -109,7 +109,7 @@ static int device_notifier_handler(struct notifier_block *b, unsigned long event
 
 static struct notifier_block device_notifier_block = {
         .notifier_call = device_notifier_handler,
-        .priority = INT_MAX, //We need to be first
+        .priority = INT_MIN, //We need to be first
 };
 /**
  * Watches for USB events
@@ -162,7 +162,7 @@ static int ubscore_notifier_handler(struct notifier_block * self, unsigned long 
     }
 
     //This may need to be changed to MODULE_STATE_LIVE if MODULE_STATE_COMING is too early for device notification
-    if (state != MODULE_STATE_COMING)
+    if (state != MODULE_STATE_LIVE)
         return NOTIFY_OK;
 
     pr_loc_dbg("usbcore registered, adding device watcher");
