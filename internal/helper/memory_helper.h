@@ -1,5 +1,5 @@
-#ifndef REDPILL_MEMORY_H
-#define REDPILL_MEMORY_H
+#ifndef REDPILL_MEMORY_HELPER_H
+#define REDPILL_MEMORY_HELPER_H
 
 #define WITH_MEM_UNLOCKED(vaddr, size, code)           \
     do {                                               \
@@ -34,4 +34,4 @@ void set_mem_addr_rw(const unsigned long vaddr, unsigned long len);
  */
 void set_mem_addr_ro(const unsigned long vaddr, unsigned long len);
 
-#endif //REDPILL_MEMORY_H
+#endif //REDPILL_MEMORY_HELPER_H

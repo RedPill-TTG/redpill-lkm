@@ -89,7 +89,7 @@
 
 #include "override_symbol.h"
 #include "../common.h"
-#include "memory.h" //set_mem_addr_ro(), set_mem_addr_rw()
+#include "helper/memory_helper.h" //set_mem_addr_ro(), set_mem_addr_rw()
 #include <asm/asm-offsets.h> //__NR_syscall_max & NR_syscalls
 #include <asm/unistd.h> //syscalls numbers (e.g. __NR_read)
 #include <linux/kallsyms.h> //kallsyms_lookup_name()

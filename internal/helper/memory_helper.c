@@ -1,9 +1,9 @@
 /**
  * TODO: look into ovrride_symbol to check if there's any docs
  */
-#include "memory.h"
-#include "../common.h"
-#include "call_protected.h" //_flush_tlb_all()
+#include "memory_helper.h"
+#include "../../common.h"
+#include "../call_protected.h" //_flush_tlb_all()
 #include <asm/cacheflush.h> //PAGE_ALIGN
 #include <asm/page_types.h> //PAGE_SIZE
 #include <asm/pgtable_types.h> //_PAGE_RW
