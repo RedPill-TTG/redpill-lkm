@@ -39,11 +39,7 @@ CP_DECLARE_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port));
 CP_DECLARE_SHIM(int, update_console_cmdline, CP_LIST(char *name, int idx, char *name_new, int idx_new, char *options));
 
 #ifdef CONFIG_SYNO_BOOT_SATA_DOM
-struct scsi_disk;
-struct scsi_device;
 struct Scsi_Host;
-CP_DECLARE_SHIM(int, read_capacity_10, CP_LIST(struct scsi_disk *sdkp, struct scsi_device *sdp, unsigned char *buffer));
-CP_DECLARE_SHIM(int, read_capacity_16, CP_LIST(struct scsi_disk *sdkp, struct scsi_device *sdp, unsigned char *buffer));
 CP_DECLARE_SHIM(int, scsi_scan_host_selected, CP_LIST(struct Scsi_Host *shost, unsigned int channel, unsigned int id, u64 lun, int rescan));
 #endif
 
