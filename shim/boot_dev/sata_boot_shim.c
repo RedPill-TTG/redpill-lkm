@@ -394,6 +394,8 @@ static int on_existing_device(struct device *dev, void *data)
 static void inline probe_existing_devices(struct device_driver *drv)
 {
     int code = bus_for_each_dev(drv->bus, NULL, NULL, on_existing_device);
+    DBG_ALLOW_UNUSED(code);
+
     pr_loc_dbg("bus_for_each_dev returned %d", code);
 }
 

@@ -175,7 +175,7 @@ static int alloc_buffers(void)
  *
  * @todo this should probably be extracted
  */
-static const char *get_hex_print(const char *buffer, int len)
+static __used const char *get_hex_print(const char *buffer, int len)
 {
     if (unlikely(len == 0)) {
         hex_print_buffer[0] = '\0';

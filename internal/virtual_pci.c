@@ -258,15 +258,17 @@ static struct virtual_device *devices[MAX_VPCI_DEVS] = { NULL }; //All virtual d
 void print_pci_descriptor(void *test_dev)
 {
     pr_loc_dbg("Printing PCI descriptor @ %p", test_dev);
-    printk("\n31***********0***ADDR*******************\n");
+    pr_loc_dbg_raw("\n31***********0***ADDR*******************\n");
     u8 *ptr = (u8 *)test_dev;
+    DBG_ALLOW_UNUSED(*ptr);
+
     for (int row = 3; row < 64; row += 4) {
         for (int byte = 0; byte > -4; byte--) {
-            printk("%02x ", *(ptr + row + byte));
-            if (byte == -1) printk("  ");
+            pr_loc_dbg_raw("%02x ", *(ptr + row + byte));
+            if (byte == -1) pr_loc_dbg_raw("  ");
         }
 
-        printk(" | 0x%02X\n", row - 3);
+        pr_loc_dbg_raw(" | 0x%02X\n", row - 3);
     }
     //The following format will be useful when/if CAPs are implemented
 //    printk("\n--------------Device Private--------------\n");
@@ -487,7 +489,7 @@ vpci_add_device(unsigned char bus_no, unsigned char dev_no, unsigned char fn_no,
     pci_bus_add_devices(bus);
 #endif
 
-    pr_loc_err("Added device with new bus @ bus=%02x dev=%02x fn=%02x", *device->bus_no, device->dev_no, device->fn_no);
+    pr_loc_inf("Added device with new bus @ bus=%02x dev=%02x fn=%02x", *device->bus_no, device->dev_no, device->fn_no);
     return device;
 }
 

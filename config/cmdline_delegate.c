@@ -378,6 +378,7 @@ int extract_config_from_cmdline(struct runtime_config *config)
      */
     unsigned int param_counter = 0;
     char *single_param_chunk; //Pointer to the beginning of the cmdline token
+    DBG_ALLOW_UNUSED(param_counter);
 
     while ((single_param_chunk = strsep(&cmdline_txt, CMDLINE_SEP)) != NULL ) {
         if (unlikely(single_param_chunk[0] == '\0')) //Skip empty params (e.g. last one)

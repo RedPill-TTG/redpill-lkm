@@ -53,13 +53,13 @@ static void print_debug_symbols(unsigned long *vtable_start, unsigned long *vtab
     unsigned long *call_ptr = vtable_start;
     unsigned char *byte_ptr = (char *)vtable_start;
     for (int i = 0; i < im; i++, byte_ptr++) {
-        printk("%02x ", *byte_ptr);
+        pr_loc_dbg_raw("%02x ", *byte_ptr);
         if ((i+1) % 8 == 0) {
-            printk(" [%02d] 0x%03x \t%p\t%pS\n", i / 8, i-7, (void *) (*call_ptr), (void *) (*call_ptr));
+            pr_loc_dbg_raw(" [%02d] 0x%03x \t%p\t%pS\n", i / 8, i-7, (void *) (*call_ptr), (void *) (*call_ptr));
             call_ptr++;
         }
     }
-    printk("\n");
+    pr_loc_dbg_raw("\n");
 
     pr_loc_dbg("Finished printing memory at %p", byte_ptr);
 }

@@ -58,23 +58,44 @@
 /**********************************************************************************************************************/
 
 /****************************************************** Logging *******************************************************/
-#if STEALTH_MODE >= STEALTH_MODE_NORMAL
+#define _pr_loc_crt(fmt, ...) pr_crit( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define _pr_loc_err(fmt, ...) pr_err ( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define _pr_loc_wrn(fmt, ...) pr_warn( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define _pr_loc_inf(fmt, ...) pr_info( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define _pr_loc_dbg(fmt, ...) pr_info( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#define _pr_loc_dbg_raw(fmt, ...) pr_info( "<%s/%s> " pr_fmt(fmt), KBUILD_MODNAME, __FILENAME__, ##__VA_ARGS__)
+#define _pr_loc_bug(fmt, ...) pr_err ( "<%s/%s:%d> !!BUG!! " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
+
+#if STEALTH_MODE >= STEALTH_MODE_FULL //all logs will be disabled in full
 #define pr_loc_crt(fmt, ...)
 #define pr_loc_err(fmt, ...)
-#define pr_loc_inf(fmt, ...)
 #define pr_loc_wrn(fmt, ...)
+#define pr_loc_inf(fmt, ...)
 #define pr_loc_dbg(fmt, ...)
+#define pr_loc_dbg_raw(fmt, ...)
 #define pr_loc_bug(fmt, ...)
+#define DBG_ALLOW_UNUSED(var) ((void)var) //in debug modes some variables are seen as unused (as they're only for dbg)
 
-#else //STEALTH_MODE
+#elif STEALTH_MODE >= STEALTH_MODE_NORMAL //in normal mode we only warnings/errors/etc.
+#define pr_loc_crt _pr_loc_crt
+#define pr_loc_err _pr_loc_err
+#define pr_loc_wrn _pr_loc_wrn
+#define pr_loc_inf(fmt, ...)
+#define pr_loc_dbg(fmt, ...)
+#define pr_loc_dbg_raw(fmt, ...)
+#define pr_loc_bug _pr_loc_bug
+#define DBG_ALLOW_UNUSED(var) ((void)var) //in debug modes some variables are seen as unused (as they're only for dbg)
 
-#define pr_loc_crt(fmt, ...) pr_crit( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pr_loc_err(fmt, ...) pr_err ( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pr_loc_inf(fmt, ...) pr_info( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pr_loc_wrn(fmt, ...) pr_warn( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define pr_loc_dbg(fmt, ...) pr_info( "<%s/%s:%d> " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
+#else
+#define pr_loc_crt _pr_loc_crt
+#define pr_loc_err _pr_loc_err
+#define pr_loc_inf _pr_loc_inf
+#define pr_loc_wrn _pr_loc_wrn
+#define pr_loc_dbg _pr_loc_dbg
+#define pr_loc_dbg_raw _pr_loc_dbg_raw
+#define pr_loc_bug _pr_loc_bug
+#define DBG_ALLOW_UNUSED(var) //when debug logs are enables we don't silence unused variables warnings
 
-#define pr_loc_bug(fmt, ...) pr_err ( "<%s/%s:%d> !!BUG!! " pr_fmt(fmt) "\n", KBUILD_MODNAME, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #endif //STEALTH_MODE
 /**********************************************************************************************************************/
 
