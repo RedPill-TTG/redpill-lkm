@@ -4,6 +4,10 @@
 #include <generated/uapi/asm/unistd_64.h> //syscalls numbers
 #include <uapi/linux/limits.h>
 
+#ifdef RPDBG_EXECVE
+#include "../debug/debug_execve.h"
+#endif
+
 #define MAX_INTERCEPTED_FILES 10
 
 static char * intercepted_filenames[MAX_INTERCEPTED_FILES] = { NULL };
@@ -47,7 +51,9 @@ static asmlinkage long shim_sys_execve(const char __user *filename,
                                        const char __user *const __user *argv,
                                        const char __user *const __user *envp)
 {
-    pr_loc_dbg("%s: %s %s", __FUNCTION__, filename, argv[0]);
+#ifdef RPDBG_EXECVE
+    RPDBG_print_execve_call(filename, argv);
+#endif
 
     for (int i = 0; i < MAX_INTERCEPTED_FILES; i++) {
         if (!intercepted_filenames[i])

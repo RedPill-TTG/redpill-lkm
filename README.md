@@ -26,6 +26,9 @@ Read about the quirk in a separate repo: https://github.com/RedPill-TTG/dsm-rese
 5. `make`
 6. You will get a `redpill.ko` module as the result, you can `insmod` it
 
+While calling `make` you can also add these additional modifiers (e.g. `make FOO BAR`):
+ - `DBG_EXECVE`: enabled debugging of every `execve()` call with arguments
+
 ## Documentation split
 The documentation regarding actual quirks/mechanisms/discoveries regarding DSM is present in a dedicated research repo 
 at https://github.com/RedPill-TTG/dsm-research/. Documentation in this repository is solely aimed to explain 
