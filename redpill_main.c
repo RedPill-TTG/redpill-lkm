@@ -3,6 +3,7 @@
 #include "config/runtime_config.h"
 #include "common.h" //commonly used headers in this module
 #include "internal/intercept_execve.h" //Handling of execve() replacement
+#include "internal/scsi/scsi_notifier.h" //the missing pub/sub handler for SCSI driver
 #include "config/cmdline_delegate.h" //Parsing of kernel cmdline
 #include "shim/boot_device_shim.h" //Registering & deciding between boot device shims
 #include "shim/bios_shim.h" //Shimming various mfgBIOS functions to make them happy
@@ -46,6 +47,7 @@ static int __init init_(void)
             (out = extract_config_from_cmdline(&current_config)) != 0 //This MUST be the first entry
          || (out = populate_runtime_config(&current_config)) != 0 //This MUST be second
          || (out = register_uart_fixer(current_config.hw_config)) != 0 //Fix consoles ASAP
+         || (out = register_scsi_notifier()) != 0 //Load SCSI notifier so that boot shim (& others) can use it
          || (out = register_boot_shim(&current_config.boot_media)) //Make sure we're quick with this one
          || (out = register_execve_interceptor()) != 0 //Register this reasonably high as other modules can use it blindly
          || (out = register_bios_shim(current_config.hw_config)) != 0
@@ -90,6 +92,7 @@ static void __exit cleanup_(void)
         unregister_bios_shim,
         unregister_execve_interceptor,
         unregister_boot_shim,
+        unregister_scsi_notifier,
         unregister_uart_fixer
     };
 
