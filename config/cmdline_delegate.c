@@ -13,9 +13,8 @@
  */
 static bool extract_hw(syno_hw *model, const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_KT_HW, sizeof_str_chunk(CMDLINE_KT_HW)) != 0) {
+    if (strncmp(param_pointer, CMDLINE_KT_HW, sizeof_str_chunk(CMDLINE_KT_HW)) != 0)
         return false;
-    }
 
     if (strscpy((char *)model, param_pointer + sizeof_str_chunk(CMDLINE_KT_HW), sizeof(syno_hw)) < 0)
         pr_loc_wrn("HW version truncated to %zu", sizeof(syno_hw)-1);
@@ -34,14 +33,13 @@ static bool extract_hw(syno_hw *model, const char *param_pointer)
  */
 static bool extract_sn(serial_no *sn, const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_KT_SN, sizeof_str_chunk(CMDLINE_KT_SN)) != 0) {
+    if (strncmp(param_pointer, CMDLINE_KT_SN, sizeof_str_chunk(CMDLINE_KT_SN)) != 0)
         return false;
-    }
 
     if(strscpy((char *)sn, param_pointer + sizeof_str_chunk(CMDLINE_KT_SN), sizeof(serial_no)) < 0)
         pr_loc_wrn("S/N truncated to %zu", sizeof(serial_no)-1);
 
-    pr_loc_dbg("S/N version set to: %s", (char *)sn);
+    pr_loc_dbg("S/N set to: %s", (char *)sn);
 
     return true;
 }
@@ -55,9 +53,8 @@ static bool extract_sn(serial_no *sn, const char *param_pointer)
  */
 static bool extract_vid(device_id *user_vid, const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_CT_VID, sizeof_str_chunk(CMDLINE_CT_VID)) != 0) {
+    if (strncmp(param_pointer, CMDLINE_CT_VID, sizeof_str_chunk(CMDLINE_CT_VID)) != 0)
         return false;
-    }
 
     long long numeric_param;
     int tmp_call_res = kstrtoll(param_pointer + sizeof_str_chunk(CMDLINE_CT_VID), 0, &numeric_param);
@@ -91,9 +88,8 @@ static bool extract_vid(device_id *user_vid, const char *param_pointer)
  */
 static bool extract_pid(device_id *user_pid, const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_CT_PID, sizeof_str_chunk(CMDLINE_CT_PID)) != 0) {
+    if (strncmp(param_pointer, CMDLINE_CT_PID, sizeof_str_chunk(CMDLINE_CT_PID)) != 0)
         return false;
-    }
 
     long long numeric_param;
     int tmp_call_res = kstrtoll(param_pointer + sizeof_str_chunk(CMDLINE_CT_PID), 0, &numeric_param);
@@ -127,9 +123,8 @@ static bool extract_pid(device_id *user_pid, const char *param_pointer)
  */
 static bool extract_mfg(bool *is_mfg_boot, const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_CT_MFG, sizeof(CMDLINE_CT_MFG)) != 0) {
+    if (strncmp(param_pointer, CMDLINE_CT_MFG, sizeof(CMDLINE_CT_MFG)) != 0)
         return false;
-    }
 
     *is_mfg_boot = true;
     pr_loc_dbg("MFG boot enabled");
@@ -146,9 +141,8 @@ static bool extract_mfg(bool *is_mfg_boot, const char *param_pointer)
  */
 static bool extract_port_thaw(bool *port_thaw, const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_KT_THAW, sizeof_str_chunk(CMDLINE_KT_THAW)) != 0) {
+    if (strncmp(param_pointer, CMDLINE_KT_THAW, sizeof_str_chunk(CMDLINE_KT_THAW)) != 0)
         return false;
-    }
 
     short value = param_pointer[sizeof_str_chunk(CMDLINE_KT_THAW)];
 
@@ -180,9 +174,8 @@ static bool extract_port_thaw(bool *port_thaw, const char *param_pointer)
  */
 static bool extract_netif_num(unsigned short *netif_num, const char *param_pointer)
 {
-    if (strncmp(param_pointer, CMDLINE_KT_NETIF_NUM, sizeof_str_chunk(CMDLINE_KT_NETIF_NUM)) != 0) {
+    if (strncmp(param_pointer, CMDLINE_KT_NETIF_NUM, sizeof_str_chunk(CMDLINE_KT_NETIF_NUM)) != 0)
         return false;
-    }
 
     short value = *(param_pointer + sizeof_str_chunk(CMDLINE_KT_NETIF_NUM)) - 48; //ASCII: 0=48 and 9=57
 
