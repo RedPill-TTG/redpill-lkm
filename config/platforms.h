@@ -38,8 +38,8 @@ const struct hw_config supported_platforms[] = {
 
                     { .type = __VPD_TERMINATOR__ }
             },
-            .emulate_rtc = false,
-            .swap_serial = true,
+            .emulate_rtc = true,
+            .swap_serial = false,
     },
 };
 
