@@ -221,7 +221,7 @@ int rtc_proxy_get_auto_power_on(struct MfgCompatAutoPwrOn *mfgPwrOn)
 
 int rtc_proxy_set_auto_power_on(struct MfgCompatAutoPwrOn *mfgPwrOn)
 {
-    if (!mfgPwrOn || mfgPwrOn->num < 1) { //That's just either a bogus call or a stupid call
+    if (!mfgPwrOn || mfgPwrOn->num < 0) { //That's just either a bogus call or a stupid call
         pr_loc_wrn("Got an invalid call to %s", __FUNCTION__);
         return -EINVAL;
     }
