@@ -140,7 +140,7 @@ static void unregister_device_notifier(void)
 
     //This has to use dynamic calling to avoid being dependent on usbcore (since we need to load before usbcore)
     _usb_unregister_notify(&device_notifier_block); //has no return value
-    module_notify_registered = false;
+    device_notify_registered = false;
     pr_loc_dbg("Unregistered USB device notifier");
 }
 
