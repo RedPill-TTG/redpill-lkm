@@ -85,15 +85,14 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
         return NOTIFY_OK;
 
     if (state == MODULE_STATE_GOING) {
-        //So this is actually not a problem with this module but rather with the bios module - it cannot be unloaded.
+        //So this is actually not a problem with RP but rather with the bios module - it cannot be unloaded at will.
         //As soon as you try it will cause a circular error with page faults and the kernel will demand a reboot
         //We're not unregistering notifier in case one day this is fixed by the bios module ¯\_(ツ)_/¯
-        pr_loc_err("%s BIOS went away - "
-                   "you will probably get a kernel error soon and there's nothing to be done besides rebooting",
-                   mod->name);
+        pr_loc_err("%s BIOS went away - you may get a kernel panic if YOU unloaded it", mod->name);
         bios_shimmed = false;
-        disable_symbols_capture();
         vtable_start = vtable_end = NULL;
+        enable_symbols_capture();
+        clean_shims_history();
 
         return NOTIFY_OK;
     }
@@ -340,10 +339,8 @@ static void *backup_addr = NULL;
  */
 static inline int enable_symbols_capture(void)
 {
-    if (unlikely(backup_addr)) {
-        pr_loc_bug("Capture already enabled!");
-        return 0; //Technically it's working so it's a non-error scenario
-    }
+    if (unlikely(backup_addr))
+        return 0; //Technically it's working so it's a non-error scenario (and it may happen with modules notification)
 
     return override_symbol("apply_relocate_add", &_apply_relocate_add, &backup_addr, backup_code);
 }
