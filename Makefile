@@ -8,7 +8,7 @@ SRCS-$(DBG_EXECVE) += debug/debug_execve.c
 ccflags-$(DBG_EXECVE) += -DRPDBG_EXECVE
 SRCS-y  += compat/string_compat.c \
 		   \
-		   internal/helper/memory_helper.c internal/helper/symbol_helper.c \
+		   internal/helper/math_helper.c internal/helper/memory_helper.c internal/helper/symbol_helper.c \
 		   internal/scsi/scsi_toolbox.c internal/scsi/scsi_notifier_list.c internal/scsi/scsi_notifier.c \
 		   internal/override_symbol.c internal/intercept_execve.c internal/call_protected.c \
 		   internal/intercept_driver_register.c internal/stealth/sanitize_cmdline.c internal/stealth.c \
