@@ -8,16 +8,21 @@ SRCS-$(DBG_EXECVE) += debug/debug_execve.c
 ccflags-$(DBG_EXECVE) += -DRPDBG_EXECVE
 SRCS-y  += compat/string_compat.c \
 		   \
-		   internal/memory.c internal/override_symbol.c internal/intercept_execve.c internal/call_protected.c \
+		   internal/helper/memory_helper.c internal/helper/symbol_helper.c \
+		   internal/scsi/scsi_toolbox.c internal/scsi/scsi_notifier_list.c internal/scsi/scsi_notifier.c \
+		   internal/override_symbol.c internal/intercept_execve.c internal/call_protected.c \
 		   internal/intercept_driver_register.c internal/stealth/sanitize_cmdline.c internal/stealth.c \
 		   internal/virtual_pci.c internal/uart/uart_swapper.c internal/uart/vuart_virtual_irq.c \
 		   internal/uart/virtual_uart.c \
 		   \
 		   config/cmdline_delegate.c config/runtime_config.c \
 		   \
-		   shim/boot_dev/usb_boot_shim.c shim/boot_dev/sata_boot_shim.c shim/boot_device_shim.c shim/bios/rtc_proxy.c \
-		   shim/bios/bios_shims_collection.c shim/bios_shim.c shim/block_fw_update_shim.c shim/disable_exectutables.c \
-		   shim/pci_shim.c shim/pmu_shim.c shim/uart_fixer.c \
+		   shim/boot_dev/boot_shim_base.c shim/boot_dev/usb_boot_shim.c shim/boot_dev/fake_sata_boot_shim.c \
+		   shim/boot_dev/sata_boot_shim.c shim/boot_device_shim.c \
+		   \
+		   shim/storage/smart_shim.c shim/storage/virtio_storage_shim.c \
+		   shim/bios/bios_shims_collection.c shim/bios/rtc_proxy.c shim/bios_shim.c shim/block_fw_update_shim.c \
+		   shim/disable_exectutables.c shim/pci_shim.c shim/pmu_shim.c shim/uart_fixer.c \
 		   \
 	       redpill_main.c
 OBJS   = $(SRCS-y:.c=.o)
@@ -61,6 +66,10 @@ else
 # error here as we don't know if the file is parsed for the first time or the second time. Just Kbuild peculiarities ;)
 ccflags-y = --bogus-flag-which-should-not-be-called-NO_RP_MODULE_TARGER_SPECIFIED
 endif
+
+# this MUST be last after all other options to force GNU89 for the file being a workaround for GCC bug #275674
+# see internal/scsi/scsi_notifier_list.h for detailed explanation
+CFLAGS_scsi_notifier_list.o += -std=gnu89
 
 # do NOT move this target - make <3.80 doesn't have a way to specify default target and takes the first one found
 dev: # all symbols included, debug messages included
