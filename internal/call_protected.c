@@ -93,7 +93,7 @@ DEFINE_UNEXPORTED_SHIM(int, scsi_scan_host_selected, CP_LIST(struct Scsi_Host *s
 #endif
 
 DEFINE_UNEXPORTED_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port), port, -EIO);
-DEFINE_UNEXPORTED_SHIM(int, update_console_cmdline, CP_LIST(char *name, int idx, char *name_new, int idx_new, char *options), CP_LIST(name, idx, name_new, idx_new, options), -EIO);
+DEFINE_UNEXPORTED_SHIM(int, serial8250_find_port, CP_LIST(struct uart_port *p), CP_LIST(p), -EIO);
 
 DEFINE_DYNAMIC_SHIM(void, usb_register_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);
 DEFINE_DYNAMIC_SHIM(void, usb_unregister_notify, CP_LIST(struct notifier_block *nb), CP_LIST(nb), __VOID_RETURN__);

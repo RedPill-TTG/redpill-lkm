@@ -58,7 +58,8 @@ CP_DECLARE_SHIM(struct filename *, getname, CP_LIST(const char __user *name));
 
 typedef struct uart_port *uart_port_p;
 CP_DECLARE_SHIM(int, early_serial_setup, CP_LIST(struct uart_port *port));
-CP_DECLARE_SHIM(int, update_console_cmdline, CP_LIST(char *name, int idx, char *name_new, int idx_new, char *options));
+CP_DECLARE_SHIM(int, serial8250_find_port, CP_LIST(struct uart_port *p));
+
 
 #ifdef CONFIG_SYNO_BOOT_SATA_DOM
 struct Scsi_Host;
