@@ -13,22 +13,22 @@
  * which is not needed after module is loaded. The earliest hook normally available for other modules is the access
  * through modules notification API. It will provide access to the module as soon as its binary is loaded and init
  * function is executing. However:
- *  - we only get an access to the "struct module"
+ *  - we only get the access to the "struct module"
  *  - the data available contains kallsyms
  *  - at this point all non-kernel symbols are discarded from memory (see kernel/module.c:simplify_symbols())
  *
  *  While the symbols exist in the memory the symbol table cannot be accessed (short of loading the ELF again and
- *  re-parsing the binary... which is way to complex). Most of the ELF parsing routines in the kernel are implemented
+ *  re-parsing the binary... which is way too complex). Most of the ELF parsing routines in the kernel are implemented
  *  in kernel/module.c in `static` functions. This unfortunately means they aren't really replaceable as they are
  *  inlined and mangled. However, there's one place where CPU architecture-dependent step happens: relocation of
  *  symbols. When module.c:apply_relocations() is called on x86_64 it calls the
  *  arch/x86/kernel/module.c:apply_relocate_add(). Since this function is external it can be "gently" replaced.
  *
  * During the lifetime of apply_relocate_add(), which is redirected to _apply_relocate_add() here, the full ELF with
- * symbol table is available and thus the vtable can be located using process_bios_symbols().  However it cannot be
+ * symbol table is available and thus the vtable can be located using process_bios_symbols().  However, it cannot be
  * just like that modified at this moment (remember: we're way before module init is called) as 1) functions it points
- * to may be relocated still, and 2) it's hardware-dependent (as seen by doing  print_debug_symbols() before & after
- * init). We need to hook to the module notification API and shim what's needed AFTER module is fully initialized.
+ * to may be relocated still, and 2) it's hardware-dependent (as seen by doing print_debug_symbols() before & after
+ * init). We need to hook to the module notification API and shim what's needed AFTER module started initializing.
  *
  * So in summary:
  *  1. Redirect apply_relocate_add() => _apply_relocate_add() using internal/override_symbol.h
@@ -43,7 +43,6 @@
  *   - https://en.wikipedia.org/wiki/Virtual_method_table
  */
 #include "bios_shim.h"
-
 #include "../common.h"
 #include "../internal/override_symbol.h"
 #include "../internal/call_protected.h" //kernel_has_symbol()
@@ -55,10 +54,11 @@ static bool bios_shimmed = false;
 static bool module_notify_registered = false;
 static unsigned long *vtable_start = NULL;
 static unsigned long *vtable_end = NULL;
-static const hw_config_bios_shim *hw_config = NULL;
+static const struct hw_config *hw_config = NULL;
 static inline int enable_symbols_capture(void);
 static inline int disable_symbols_capture(void);
 
+/********************************************* Shimming of mfgBIOS module *********************************************/
 /**
  * Unified way to determine if a given module is a bios module (as this is not a simple == check)
  */
@@ -123,7 +123,7 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
 }
 
 static struct notifier_block bios_notifier_block = {
-        .notifier_call = bios_module_notifier_handler
+    .notifier_call = bios_module_notifier_handler
 };
 /**
  * Registers module notifier to modify vtable as soon as module finishes loading
@@ -264,6 +264,7 @@ int unregister_bios_shim(void)
     return 0;
 }
 
+/************************************************** Internal Helpers **************************************************/
 /**
  * A modified arch/x86/kernel/module.c:apply_relocate_add() from Linux v3.10.108 to save synobios_ops address
  *
@@ -340,8 +341,7 @@ static int _apply_relocate_add(Elf64_Shdr *sechdrs, const char *strtab, unsigned
     return -ENOEXEC;
 }
 
-static unsigned char backup_code[OVERRIDE_JUMP_SIZE] = { '\0' };
-static void *backup_addr = NULL;
+DEFINE_OVSYMBOL_PTRS(apply_relocate_add);
 /**
  * Enables override of apply_relocate_add() to redirect it to _apply_relocate_add() in order to plug into a moment where
  * process_bios_symbols() can extract the data.
@@ -350,10 +350,19 @@ static void *backup_addr = NULL;
  */
 static inline int enable_symbols_capture(void)
 {
-    if (unlikely(backup_addr))
+    if (unlikely(apply_relocate_add_addr))
         return 0; //Technically it's working so it's a non-error scenario (and it may happen with modules notification)
 
-    return override_symbol("apply_relocate_add", &_apply_relocate_add, &backup_addr, backup_code);
+    ALLOC_OVSYMBOL_PTRS(apply_relocate_add);
+    int out = override_symbol("apply_relocate_add", _apply_relocate_add, &apply_relocate_add_addr,
+                              apply_relocate_add_code);
+    if (out != 0) {
+        pr_loc_err("Failed to override apply_relocate_add");
+        FREE_OVSYMBOL_PTRS(apply_relocate_add);
+        return out;
+    }
+
+    return 0;
 }
 
 /**
@@ -363,11 +372,11 @@ static inline int enable_symbols_capture(void)
  */
 static inline int disable_symbols_capture(void)
 {
-    if (!backup_addr) //may have been restored before
+    if (!apply_relocate_add_addr) //may have been restored before
         return 0;
 
-    int out = restore_symbol(backup_addr, backup_code);
-    backup_addr = 0;
+    int out = restore_symbol(apply_relocate_add_addr, apply_relocate_add_code);
+    FREE_OVSYMBOL_PTRS(apply_relocate_add);
 
     return out;
 }
