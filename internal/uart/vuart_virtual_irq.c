@@ -69,23 +69,25 @@ int vuart_enable_interrupts(struct serial8250_16550A_vdev *vdev)
     if (unlikely(!vdev->initialized)) {
         pr_loc_bug("ttyS%d is not initialized as vUART", vdev->line);
         out = -ENODEV;
-        goto error_free;
+        goto error_unlock_free;
     }
 
     if (unlikely(vuart_virq_active(vdev))) {
         pr_loc_bug("Interrupts are already enabled & scheduled for ttyS%d", vdev->line);
         out = -EBUSY;
-        goto error_free;
+        goto error_unlock_free;
     }
 
     if (!(vdev->virq_queue = kmalloc(sizeof(wait_queue_head_t), GFP_KERNEL)) ||
         !(vdev->virq_thread = kmalloc(sizeof(struct task_struct), GFP_KERNEL))) {
         out = -EFAULT;
         pr_loc_bug("kmalloc failed to reserve memory for vIRQ structures");
-        goto error_free;
+        goto error_unlock_free;
     }
 
     init_waitqueue_head(vdev->virq_queue);
+    unlock_vuart(vdev); //we can safely unlock after reserving memory but before starting thread (so we're not atomic)
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-extra-args"
     //VUART_THREAD_FMT can resolve to anonymized version without line or even IRQ#
@@ -96,13 +98,13 @@ int vuart_enable_interrupts(struct serial8250_16550A_vdev *vdev)
         pr_loc_bug("Failed to start vIRQ thread");
         goto error_free;
     }
-    unlock_vuart(vdev);
     pr_loc_dbg("vIRQ fully enabled for for ttyS%d", vdev->line);
 
     return 0;
 
-    error_free:
+    error_unlock_free:
     unlock_vuart(vdev);
+    error_free:
     if (vdev->virq_queue) {
         kfree(vdev->virq_queue);
         vdev->virq_queue = NULL;
