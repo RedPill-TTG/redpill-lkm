@@ -67,6 +67,7 @@ struct hw_config {
     bool emulate_rtc:1;
     bool swap_serial:1; //Whether ttyS0 and ttyS1 are swapped (reverses CONFIG_SYNO_X86_SERIAL_PORT_SWAP)
     bool reinit_ttyS0:1; //Should the ttyS0 be forcefully re-initialized after module loads
+    bool fix_disk_led_ctrl:1; //Disabled libata-scsi bespoke disk led control (which often crashes some v4 platforms)
 };
 
 struct runtime_config {

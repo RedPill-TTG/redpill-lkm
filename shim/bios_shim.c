@@ -35,9 +35,13 @@
  *  2. Setup module notifier
  *  3. Look for "*_synobios" module in _apply_relocate_add() and if found iterate through symbols
  *  4. Find "synobios_ops" in full symbols table and save it's start & end addresses; disable override from [1]
- *  5. Wait until notified by the kernel about module being fully loaded (see bios_module_notifier_handler())
- *  6. Replace what's needed (see bios/bios_shims_collection.c:shim_bios())
- *  7. Drink a beer
+ *  5. Wait until notified by the kernel about module started loaded (see bios_module_notifier_handler())
+ *  6. Replace what's needed (see bios/bios_shims_collection.c:shim_bios_module())
+ *  7. Wait until notified by the kernel about module fully loaded (and replace what was broken since 5.)
+ *  8. Drink a beer
+ *
+ * Additionally, this module also handles replacement of some kernel structures called by the mfgBIOS:
+ *  - see bios_shims_collection.c:shim_disk_leds_ctrl()
  *
  *  References:
  *   - https://en.wikipedia.org/wiki/Virtual_method_table
@@ -46,7 +50,7 @@
 #include "../common.h"
 #include "../internal/override_symbol.h"
 #include "../internal/call_protected.h" //kernel_has_symbol()
-#include "bios/bios_shims_collection.h" //shim_bios()
+#include "bios/bios_shims_collection.h" //shim_bios_module(), unshim_bios_module(), shim_bios_disk_leds_ctrl()
 #include <linux/notifier.h> //module notification
 #include <linux/module.h> //struct module
 
@@ -93,7 +97,7 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
         bios_shimmed = false;
         vtable_start = vtable_end = NULL;
         enable_symbols_capture();
-        clean_shims_history();
+        flush_bios_shims_history();
 
         return NOTIFY_OK;
     }
@@ -107,7 +111,7 @@ static int bios_module_notifier_handler(struct notifier_block * self, unsigned l
 
     //We shouldn't react to MODULE_STATE_LIVE multiple times (can it happen? hmm...) nor do anything before init
     // of the module finished changing the vtable
-    if (!shim_bios(hw_config, mod, vtable_start, vtable_end)) {
+    if (!shim_bios_module(hw_config, mod, vtable_start, vtable_end)) {
         bios_shimmed = false;
         return NOTIFY_OK;
     }
@@ -223,18 +227,19 @@ static void process_bios_symbols(Elf64_Shdr *sechdrs, const char *strtab, unsign
     disable_symbols_capture();
 }
 
-int register_bios_shim(const hw_config_bios_shim *hw)
+/**************************************************** Entrypoints *****************************************************/
+int register_bios_shim(const struct hw_config *hw)
 {
     int out;
     hw_config = hw;
 
-    out = enable_symbols_capture();
-    if (out != 0)
+    if (
+            (out = shim_disk_leds_ctrl(hw)) != 0 ||
+            (out = enable_symbols_capture()) != 0 ||
+            (out = register_bios_module_notifier()) != 0
+       ) {
         return out;
-
-    out = register_bios_module_notifier();
-    if (out != 0)
-        return out;
+    }
 
     pr_loc_inf("mfgBIOS shim registered");
 
@@ -246,7 +251,7 @@ int unregister_bios_shim(void)
     int out;
 
     if (likely(bios_shimmed)) {
-        if (!unshim_bios(vtable_start, vtable_end))
+        if (!unshim_bios_module(vtable_start, vtable_end))
             return -EINVAL;
     }
 
@@ -257,6 +262,8 @@ int unregister_bios_shim(void)
     out = disable_symbols_capture();
     if (unlikely(out != 0))
         return out;
+
+    unshim_disk_leds_ctrl(); //this will be noop if nothing was registered
 
     hw_config = NULL;
     pr_loc_inf("mfgBIOS shim unregistered");
