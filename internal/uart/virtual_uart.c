@@ -139,7 +139,17 @@ static struct flush_callback *flush_cbs[SERIAL8250_LAST_ISA_LINE] = { NULL };
 #else
 #define warn_bug_swapped(line) //noop
 #endif
-    
+
+#define for_each_vdev() for (int line=0; line < ARRAY_SIZE(ttySs); ++line)
+
+//Before v3.13 the kfifo_put() accepted a pointer, since then it accepts a value
+//ffs... https://github.com/torvalds/linux/commit/498d319bb512992ef0784c278fa03679f2f5649d
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#define kfifo_put_val(fifo, val) kfifo_put(fifo, &val)
+#else
+#define kfifo_put_val(fifo, val) kfifo_put(fifo, val)
+#endif
+
 /****************************************** Internal chip emulation functions ******************************************/
 /**
  * Updates state of the IIR register
@@ -323,7 +333,7 @@ static void flush_tx_fifo(struct serial8250_16550A_vdev *vdev, vuart_flush_reaso
  *
  * @return character which was read
  */
-static unsigned int transfer_char_fifo_rhr(struct serial8250_16550A_vdev *vdev)
+static unsigned char transfer_char_fifo_rhr(struct serial8250_16550A_vdev *vdev)
 {
     //Before this function is called UART_LSR_DR should be verified - it wasn't or it was wrong if this exploded
     if(unlikely(kfifo_get(vdev->rx_fifo, &vdev->rhr) == 0))
@@ -346,14 +356,14 @@ static unsigned int transfer_char_fifo_rhr(struct serial8250_16550A_vdev *vdev)
  *
  * This function does NOT recalculate IIRs (see update_interrupts_state()) and assumes you have vdev lock.
  */
-static void handle_receive_char(struct serial8250_16550A_vdev *vdev, int value)
+static void handle_receive_char(struct serial8250_16550A_vdev *vdev, unsigned char value)
 {
     //@todo this only handles overruns in FIFO mode and does not do that in non-FIFO; it behaves correctly but it
     // doesn't report OEs in non-FIFO
     vdev->rhr = value; //RHR is always populated with the value no matter the FIFO or non-FIFO mode
 
     //Put value in FIFO, it will indicate with return of 0 if it was full before attempted put (overrun/overflow)
-    if (kfifo_put(vdev->rx_fifo, &value) == 0) {
+    if (kfifo_put_val(vdev->rx_fifo, value) == 0) {
         vdev->lsr |= UART_LSR_OE; //set overrun flag as FIFO detected that
 
         //During TEST/LOOP mode many overflows are caused on purpose - we don't want to hear about them really
@@ -376,26 +386,28 @@ static void handle_receive_char(struct serial8250_16550A_vdev *vdev, int value)
  *  will prioritize threshold trigger (as a user-specified event takes precedence over internal event of FIFO full)
  * If the threshold specified by the callback setter was met flush the FIFO
  */
-static void handle_transmit_char(struct serial8250_16550A_vdev *vdev, int value)
+static void handle_transmit_char(struct serial8250_16550A_vdev *vdev, unsigned char value)
 {
     //@todo this only handle non-FIFO properly: doesn't detect OE, and doesn't reset THRE
     vdev->thr = value; //THR is always populated with the value no matter the FIFO or non-FIFO mode
     vdev->lsr &= ~UART_LSR_THRE;
 
     int fifo_len = kfifo_len(vdev->tx_fifo);
+    uart_prdbg("%s got new char ascii=%c hex=%02x on ttyS%d (FIFO#=%d)", __FUNCTION__, value, value, vdev->line,
+               fifo_len);
+
     //FIFO is full - try to flush it; if we got here it means the threshold is for sure >VUART_FIFO_LEN as this is
     // checked after we put data into the FIFO (to make sure we trigger THRESHOLD event and not FULL)
     //The reason why we check this at the beginning of new char and not after adding to FIFO is that if the transmitting
     // party sends exactly VUART_FIFO_LEN bytes and then ends the transmission we don't want to flush with FULL but with
     // IDLE to give a better sense of what's going on to the caller. FULL implies "we got too much data, there may be
     // more coming" while IDLE implies that the unit of transmission ended.
-    if (unlikely(fifo_len == VUART_FIFO_LEN)) {
+    if (unlikely(fifo_len == VUART_FIFO_LEN))
         flush_tx_fifo(vdev, VUART_FLUSH_FULL);
-    }
 
     //Put value in FIFO, it will indicate with return of 0 if it was full before attempted put (overrun/overflow)
     //This, if we are correct, cannot happen if the flush_tx_fifo() is functioning correctly as we try to flush above
-    int fifo_add = kfifo_put(vdev->tx_fifo, &value);
+    int fifo_add = kfifo_put_val(vdev->tx_fifo, value);
     fifo_len += fifo_add; //we can call kfifo_ API for this but why if we have both pieces of info anyway? ;)
     if (unlikely(fifo_add == 0)) {
         vdev->lsr |= UART_LSR_OE; //set overrun flag as FIFO detected that
@@ -539,11 +551,11 @@ static void serial_remote_write(struct uart_port *port, int offset, int value)
                 reg_write("DLL");
             } else if (vdev->mcr & UART_MCR_LOOP) { //are we in the reflection/loop mode? (=> fake TX->RX connection)
                 uart_prdbg("Loopback enabled, writing %x meant for THR to RHR directly", value);
-                handle_receive_char(vdev, value); //loopback emulates receiving char on RX
+                handle_receive_char(vdev, (unsigned char)value); //loopback emulates receiving char on RX
                 dump_mcr(vdev);
                 dump_lsr(vdev);
             } else { //just pickup the data from kernel
-                handle_transmit_char(vdev, value);
+                handle_transmit_char(vdev, (unsigned char)value);
                 reg_write("THR");
                 dump_lsr(vdev);
             }
