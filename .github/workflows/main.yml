@@ -1,0 +1,113 @@
+name: RedPill CI
+
+on:
+  push:
+  workflow_dispatch:  # click the button on GitHub repo!
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v2
+
+      - name: Cache DSM Toolchains
+        id: cache-dsm-toolchains
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-dsm-toolchains
+        with:
+          # toolchain cache files are stored in `~/.toolchain` on Linux
+          path: ~/.toolchain
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/lockfiles') }}
+
+      - name: Print env
+        run: |
+          echo github.event.action: ${{ github.event.action }}
+          echo github.event_name: ${{ github.event_name }}
+
+      - name: Install Dependencies
+        if: steps.cache-dsm-toolchains.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.toolchain/apollolake-DSM-7.0-toolchain
+          wget -q https://sourceforge.net/projects/dsgpl/files/Tool%20Chain/DSM%207.0.0%20Tool%20Chains/Intel%20x86%20Linux%204.4.180%20%28Apollolake%29/apollolake-gcc750_glibc226_x86_64-GPL.txz
+          wget -q https://sourceforge.net/projects/dsgpl/files/toolkit/DSM7.0/ds.apollolake-7.0.dev.txz
+          tar -xf apollolake-gcc750_glibc226_x86_64-GPL.txz -C ~/.toolchain/apollolake-DSM-7.0-toolchain
+          tar -xf ds.apollolake-7.0.dev.txz -C ~/.toolchain usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.0/
+          cp -rf ~/.toolchain/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.0/ ~/.toolchain/apollolake-DSM-7.0-toolkit/
+          rm -rf ~/.toolchain/usr
+          ~/.toolchain/apollolake-DSM-7.0-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-gcc --version
+
+          mkdir -p ~/.toolchain/apollolake-DSM-6.2-toolchain
+          wget -q https://sourceforge.net/projects/dsgpl/files/Tool%20Chain/DSM%206.2.4%20Tool%20Chains/Intel%20x86%20Linux%204.4.59%20%28Apollolake%29/apollolake-gcc493_glibc220_linaro_x86_64-GPL.txz
+          wget -q https://sourceforge.net/projects/dsgpl/files/toolkit/DSM6.2/ds.apollolake-6.2.dev.txz
+          tar -xf apollolake-gcc750_glibc226_x86_64-GPL.txz -C ~/.toolchain/apollolake-DSM-6.2-toolchain
+          tar -xf ds.apollolake-6.2.dev.txz -C ~/.toolchain usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-6.2/
+          cp -rf ~/.toolchain/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-6.2/ ~/.toolchain/apollolake-DSM-6.2-toolkit/
+          rm -rf ~/.toolchain/usr
+          ~/.toolchain/apollolake-DSM-6.2-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-gcc --version
+
+
+          mkdir -p ~/.toolchain/bromolow-DSM-7.0-toolchain
+          wget -q https://sourceforge.net/projects/dsgpl/files/Tool%20Chain/DSM%207.0.0%20Tool%20Chains/Intel%20x86%20linux%203.10.108%20%28Bromolow%29/bromolow-gcc750_glibc226_x86_64-GPL.txz
+          wget -q https://sourceforge.net/projects/dsgpl/files/toolkit/DSM7.0/ds.bromolow-7.0.dev.txz
+          tar -xf bromolow-gcc750_glibc226_x86_64-GPL.txz -C ~/.toolchain/bromolow-DSM-7.0-toolchain
+          tar -xf ds.bromolow-7.0.dev.txz -C ~/.toolchain usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.0/
+          cp -rf ~/.toolchain/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-7.0/ ~/.toolchain/bromolow-DSM-7.0-toolkit/
+          rm -rf ~/.toolchain/usr
+          ~/.toolchain/bromolow-DSM-7.0-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-gcc --version
+
+          mkdir -p ~/.toolchain/bromolow-DSM-6.2-toolchain
+          wget -q https://sourceforge.net/projects/dsgpl/files/Tool%20Chain/DSM%206.2.4%20Tool%20Chains/Intel%20x86%20linux%203.10.105%20%28Bromolow%29/bromolow-gcc493_glibc220_linaro_x86_64-GPL.txz
+          wget -q https://sourceforge.net/projects/dsgpl/files/toolkit/DSM6.2/ds.bromolow-6.2.dev.txz
+          tar -xf bromolow-gcc750_glibc226_x86_64-GPL.txz -C ~/.toolchain/bromolow-DSM-6.2-toolchain
+          tar -xf ds.bromolow-6.2.dev.txz -C ~/.toolchain usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-6.2/
+          cp -rf ~/.toolchain/usr/local/x86_64-pc-linux-gnu/x86_64-pc-linux-gnu/sys-root/usr/lib/modules/DSM-6.2/ ~/.toolchain/bromolow-DSM-6.2-toolkit/
+          rm -rf ~/.toolchain/usr
+          ~/.toolchain/bromolow-DSM-6.2-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu-gcc --version
+
+      - name: Build
+        shell: bash
+        run: |
+          mkdir ~/rp-lkm
+          make LINUX_SRC=~/.toolchain/apollolake-DSM-7.0-toolkit/build clean
+          make LINUX_SRC=~/.toolchain/apollolake-DSM-7.0-toolkit/build CROSS_COMPILE=~/.toolchain/apollolake-DSM-7.0-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu- dev-v7
+          cp redpill.ko ~/rp-lkm/redpill-linux-v4.4.180+.ko
+
+          make LINUX_SRC=~/.toolchain/apollolake-DSM-6.2-toolkit/build clean
+          make LINUX_SRC=~/.toolchain/apollolake-DSM-6.2-toolkit/build CROSS_COMPILE=~/.toolchain/apollolake-DSM-6.2-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu- dev-v6
+          cp redpill.ko ~/rp-lkm/redpill-linux-v4.4.59+.ko
+
+          make LINUX_SRC=~/.toolchain/bromolow-DSM-7.0-toolkit/build clean
+          make LINUX_SRC=~/.toolchain/bromolow-DSM-7.0-toolkit/build CROSS_COMPILE=~/.toolchain/bromolow-DSM-7.0-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu- dev-v7
+          cp redpill.ko ~/rp-lkm/redpill-linux-v3.10.108.ko
+
+          make LINUX_SRC=~/.toolchain/bromolow-DSM-6.2-toolkit/build clean
+          make LINUX_SRC=~/.toolchain/bromolow-DSM-6.2-toolkit/build CROSS_COMPILE=~/.toolchain/bromolow-DSM-6.2-toolchain/x86_64-pc-linux-gnu/bin/x86_64-pc-linux-gnu- dev-v6
+          cp redpill.ko ~/rp-lkm/redpill-linux-v3.10.105.ko
+
+      - name: Strip
+        shell: bash
+        run: strip -S ~/rp-lkm/*.ko
+
+      - name: Pack
+        shell: bash
+        run: |
+          ls -laR ~/rp-lkm
+          zip redpill-all.zip -j ~/rp-lkm/*.ko
+
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+          path: ~/rp-lkm/*.ko
+          name: redpill-all
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: redpill-all.zip
