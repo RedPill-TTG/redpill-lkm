@@ -1,0 +1,15 @@
+name: Rebase Upstream
+on:
+  schedule:
+    - cron: '30 5,17 * * *'
+    # scheduled at 05:30 and 17:30 every day
+
+  workflow_dispatch:  # click the button on GitHub repo!
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 10  # greater than the number of commits you made
+      - uses: imba-tjd/rebase-upstream-action@0.5
