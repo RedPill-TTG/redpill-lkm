@@ -98,7 +98,7 @@
 #define pr_loc_dbg_ioctl(cmd_hex, subcmd_name, bdev) \
     pr_loc_dbg("Handling ioctl(0x%x)->%s for /dev/%s", cmd_hex, subcmd_name, (bdev)->bd_disk->disk_name);
 #define pr_loc_dbg_ioctl_unk(cmd_hex, subcmd_hex, bdev) \
-    pr_loc_dbg("Handling ioctl(cmd=0x%x ; sub=%0x%x) for /dev/%s - not hooked (noop)", \
+    pr_loc_dbg("Handling ioctl(cmd=0x%x ; sub=0x%x) for /dev/%s - not hooked (noop)", \
                cmd_hex, subcmd_hex, (bdev)->bd_disk->disk_name);
 #else
 #define pr_loc_dbg_ioctl(cmd_hex, subcmd_name, bdev) //noop
