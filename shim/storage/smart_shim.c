@@ -283,7 +283,7 @@ static int populate_ata_id(const u8 *req_header, void __user *buff_ptr)
     kbuf[HDIO_DRIVE_CMD_RET_SEC_CNT] = ATA_CMD_ID_ATA_SECTORS;
 
     did->config = 0x0000; //15th bit = ATA device, rest is reserved/obsolete
-    set_ata_string(did->serial_no, "VH1132", 20);
+    set_ata_string(did->serial_no, bdev->bd_disk->disk_name, 20); // More than one disk has the same serial_no will cause error in "Health Info", use disk_name instead.
     set_ata_string(did->fw_rev, "1.13.2", 8);
     set_ata_string(did->model, "Virtual HDD", 40);
     did->reserved50 = (1 << 14); //"shall be set to one"
